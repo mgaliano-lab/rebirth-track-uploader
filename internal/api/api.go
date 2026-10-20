@@ -136,20 +136,33 @@ func (c *Client) OpenSession(flavor, fileName string, firstLineAt *time.Time) (i
 	return out.ID, err
 }
 
-// SendBatch comprime y sube un lote. Devuelve los bytes enviados.
-func (c *Client) SendBatch(sessionID, seq int, offsetStart, offsetEnd int64, data []byte) (int, error) {
+// BatchResult: si el sitio ya tenía esa secuencia (reintento), Duplicate=true y OffsetEnd dice
+// hasta dónde quedó guardada: la app sigue desde ahí para no duplicar ni perder líneas.
+type BatchResult struct {
+	Sent      int
+	Duplicate bool  `json:"duplicate"`
+	OffsetEnd int64 `json:"offsetEnd"`
+}
+
+// SendBatch comprime y sube un lote.
+func (c *Client) SendBatch(sessionID, seq int, offsetStart, offsetEnd int64, data []byte) (BatchResult, error) {
 	var gz bytes.Buffer
 	w, _ := gzip.NewWriterLevel(&gz, gzip.BestCompression)
 	w.Write(data)
 	w.Close()
+	var res BatchResult
 	code, err := c.do("POST", fmt.Sprintf("/api/uploader/sessions/%d/batches", sessionID), bytes.NewReader(gz.Bytes()), map[string]string{
 		"Content-Type":   "application/gzip",
 		"X-Seq":          strconv.Itoa(seq),
 		"X-Offset-Start": strconv.FormatInt(offsetStart, 10),
 		"X-Offset-End":   strconv.FormatInt(offsetEnd, 10),
-	}, nil)
+	}, &res)
 	if code == http.StatusNotFound {
-		return 0, ErrSessionGone
+		return res, ErrSessionGone
 	}
-	return gz.Len(), err
+	res.Sent = gz.Len()
+	if !res.Duplicate {
+		res.OffsetEnd = offsetEnd
+	}
+	return res, err
 }

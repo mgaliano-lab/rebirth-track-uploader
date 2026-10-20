@@ -90,6 +90,23 @@ func Read(path string, offset int64, inRaid bool, zone string, raidDifficulties 
 	return ch, nil
 }
 
+// ReadRange relee exactamente [offset, end) (límite de línea ya confirmado por el sitio) para
+// recuperar el estado de zona en ese punto.
+func ReadRange(path string, offset, end int64, inRaid bool, zone string, raidDifficulties map[int]bool) (Chunk, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return Chunk{}, err
+	}
+	defer f.Close()
+	buf := make([]byte, end-offset)
+	if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
+		return Chunk{}, err
+	}
+	ch := Filter(buf, inRaid, zone, raidDifficulties)
+	ch.OffsetStart, ch.OffsetEnd = offset, end
+	return ch, nil
+}
+
 // Filter recorre las líneas y conserva las de bandas (más el encabezado COMBAT_LOG_VERSION).
 func Filter(buf []byte, inRaid bool, zone string, raidDifficulties map[int]bool) Chunk {
 	var out bytes.Buffer

@@ -235,7 +235,7 @@ func (a *App) processFile(in wow.Install, f logs.File, consentAt time.Time, raid
 			if p.Seq == 0 && p.Header != "" {
 				data = append([]byte(p.Header), data...)
 			}
-			sent, err := c.SendBatch(p.SessionID, p.Seq, ch.OffsetStart, ch.OffsetEnd, data)
+			res, err := c.SendBatch(p.SessionID, p.Seq, ch.OffsetStart, ch.OffsetEnd, data)
 			if errors.Is(err, api.ErrSessionGone) {
 				// La borraron en la web: lo que sigue va a una sesión nueva (lo borrado no se resube).
 				p.SessionID, p.Seq = 0, 0
@@ -248,15 +248,24 @@ func (a *App) processFile(in wow.Install, f logs.File, consentAt time.Time, raid
 				return err
 			}
 			p.Seq++
-			a.mu.Lock()
-			a.uploaded += int64(sent)
-			a.batches++
-			a.mu.Unlock()
-			zones := strings.Join(ch.Zones, ", ")
-			if zones == "" {
-				zones = p.Zone
+			if res.Duplicate {
+				// Ya estaba subido (un reintento): seguir exactamente desde donde lo tiene el sitio.
+				if res.OffsetEnd != ch.OffsetEnd && res.OffsetEnd > p.Offset && res.OffsetEnd <= f.Size {
+					if ch, err = logs.ReadRange(f.Path, p.Offset, res.OffsetEnd, p.InRaid, p.Zone, raid); err != nil {
+						return err
+					}
+				}
+			} else {
+				a.mu.Lock()
+				a.uploaded += int64(res.Sent)
+				a.batches++
+				a.mu.Unlock()
+				zones := strings.Join(ch.Zones, ", ")
+				if zones == "" {
+					zones = p.Zone
+				}
+				a.log("upload", "Subí %s de %s (%s, lote %d, %d líneas)", human(int64(res.Sent)), zones, in.Label, p.Seq, ch.Lines)
 			}
-			a.log("upload", "Subí %s de %s (%s, lote %d, %d líneas)", human(int64(sent)), zones, in.Label, p.Seq, ch.Lines)
 		}
 		p.Offset, p.InRaid, p.Zone = ch.OffsetEnd, ch.InRaid, ch.Zone
 		pp := p
