@@ -82,7 +82,16 @@ func (a *App) log(kind, format string, args ...any) {
 
 func (a *App) client() *api.Client { return api.New(a.BaseURL, a.Store.Read().Token, a.Version) }
 
+// Límites de la frecuencia de subida que se puede elegir en el panel.
+const (
+	MinEvery = time.Minute
+	MaxEvery = 24 * time.Hour
+)
+
 func (a *App) batchEvery() time.Duration {
+	if s := a.Store.Read().Every; s > 0 {
+		return time.Duration(s) * time.Second
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.cfg != nil && a.cfg.BatchSeconds >= 30 {
@@ -405,6 +414,31 @@ func (a *App) SetWowRoot(dir string) error {
 	return nil
 }
 
+// SetEvery fija cada cuánto se sube (0 = el valor del sitio).
+func (a *App) SetEvery(seconds int) error {
+	d := time.Duration(seconds) * time.Second
+	if seconds != 0 && (d < MinEvery || d > MaxEvery) {
+		return fmt.Errorf("elegí entre 1 minuto y 24 horas")
+	}
+	a.Store.Update(func(s *state.State) { s.Every = seconds })
+	if seconds == 0 {
+		a.log("info", "Subida cada %s (lo que indica el sitio).", human2(a.batchEvery()))
+	} else {
+		a.log("info", "Subida cada %s.", human2(d))
+	}
+	return nil
+}
+
+func human2(d time.Duration) string {
+	switch {
+	case d%time.Hour == 0:
+		return fmt.Sprintf("%d h", int(d/time.Hour))
+	case d%time.Minute == 0:
+		return fmt.Sprintf("%d min", int(d/time.Minute))
+	}
+	return d.String()
+}
+
 func (a *App) SetAddonAuto(v bool) { a.Store.Update(func(s *state.State) { s.AddonAuto = v }) }
 
 // CheckAddon busca la última versión del addon y, si corresponde, la instala en cada versión de WoW.
@@ -478,6 +512,8 @@ type Status struct {
 	Autostart bool            `json:"autostart"`
 	Packaged  bool            `json:"packaged"`
 	AppUpdate AppUpdate       `json:"appUpdate"`
+	Every     int             `json:"uploadEverySeconds"` // elegido (0 = el del sitio)
+	EveryNow  int             `json:"uploadEveryEffective"`
 }
 
 func (a *App) Status() Status {
@@ -487,6 +523,7 @@ func (a *App) Status() Status {
 		Version: a.Version, SiteURL: a.BaseURL, Consent: s.ConsentAt != nil, Linked: s.Token != "",
 		UserName: s.UserName, Device: s.DeviceName, Paused: s.Paused, AddonAuto: s.AddonAuto, WowRoot: root,
 		Autostart: AutostartEnabled(), Packaged: Packaged(), AppUpdate: a.appUpdateStatus(s),
+		Every: s.Every, EveryNow: int(a.batchEvery() / time.Second),
 	}
 	if s.WowRoot != "" {
 		st.WowRoot = s.WowRoot
@@ -517,6 +554,9 @@ func (a *App) Status() Status {
 }
 
 func (a *App) batchEveryLocked() time.Duration {
+	if s := a.Store.Read().Every; s > 0 {
+		return time.Duration(s) * time.Second
+	}
 	if a.cfg != nil && a.cfg.BatchSeconds >= 30 {
 		return time.Duration(a.cfg.BatchSeconds) * time.Second
 	}

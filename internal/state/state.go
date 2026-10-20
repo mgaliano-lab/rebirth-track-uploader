@@ -35,6 +35,7 @@ type State struct {
 	Disabled   map[string]bool          `json:"disabledFlavors,omitempty"`
 	AddonAuto  bool                     `json:"addonAutoUpdate"`
 	AppAuto    bool                     `json:"appAutoUpdate"`
+	Every      int                      `json:"uploadEverySeconds,omitempty"` // 0 = lo que diga el sitio (3 min)
 	Files      map[string]*FileProgress `json:"files"`
 }
 

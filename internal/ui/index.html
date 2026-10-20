@@ -36,6 +36,7 @@
   .what h3 { margin:0 0 6px; font-size:.95rem; }
   .what ul { margin:0; padding-left:18px; }
   @media (max-width:640px) { .what { grid-template-columns:1fr; } }
+  select, input[type=number] { background:#000; color:var(--text); border:1px solid var(--border); border-radius:5px; padding:6px 8px; }
   input[type=text] { background:#000; color:var(--text); border:1px solid var(--border); border-radius:5px; padding:7px 10px; min-width:0; }
   label { display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
   .err { color:var(--bad); }
@@ -69,7 +70,7 @@
         <h3>⬆️ Qué sube a rebirthknights.fun</h3>
         <ul>
           <li>Solo los tramos del registro de combate <b>dentro de bandas y mazmorras</b>: daño, curas, buffs y debuffs, muertes, posiciones y nombres de los participantes, tal como los escribe el juego.</li>
-          <li>En lotes cada 3 minutos, comprimidos, a tu nombre (tu cuenta de Discord en Rebirth Track).</li>
+          <li>En lotes cada <span id="everyTxt">3 minutos</span> (lo elegís abajo), comprimidos, a tu nombre (tu cuenta de Discord en Rebirth Track).</li>
           <li><b>Nunca</b>: mundo abierto, JcJ, chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún otro archivo de tu PC.</li>
         </ul>
       </div>
@@ -112,6 +113,23 @@
       <button class="ghost" id="now">Subir ahora</button>
       <button id="pause"></button>
     </div>
+    <div class="row small" style="margin-top:10px">
+      <span class="dim">Subir cada</span>
+      <select id="every">
+        <option value="0">3 min (recomendado)</option>
+        <option value="60">1 min</option>
+        <option value="300">5 min</option>
+        <option value="600">10 min</option>
+        <option value="custom">Personalizado…</option>
+      </select>
+      <span id="everyCustom" class="row" hidden>
+        <input type="number" id="everyN" min="1" step="1" style="width:5em" />
+        <select id="everyU"><option value="60">minutos</option><option value="3600">horas</option></select>
+        <button class="ghost" id="everySave">Guardar</button>
+      </span>
+      <span class="err" id="everyErr" hidden></span>
+    </div>
+    <p class="dim small" style="margin:4px 0 0">Más seguido = ves la banda en la web casi en vivo. Más espaciado = menos subidas (lo pendiente se sube igual al cerrar la app).</p>
     <div class="row small" style="margin-top:10px" id="autostartRow"><label><input type="checkbox" id="autostart" /> Iniciar con Windows (minimizada en la bandeja)</label></div>
     <div class="row small" style="margin-top:10px" id="appUpdRow">
       <label><input type="checkbox" id="appAuto" /> Actualizar la app sola</label>
@@ -154,6 +172,7 @@ const fmt = (d) => d ? new Date(d).toLocaleTimeString('es-AR', { hour: '2-digit'
 const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB'
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
 let rootEditing = false
+let everyEditing = false
 function render(s) {
   $('ver').textContent = 'v' + s.version + ' · ' + s.siteUrl
   $('privacy').href = s.siteUrl + '/privacidad'
@@ -182,6 +201,19 @@ function render(s) {
   $('autostart').checked = s.autostart
   $('autostartRow').hidden = s.packaged
   $('autostartStore').hidden = !s.packaged
+  const ev = s.uploadEverySeconds || 0
+  const eff = s.uploadEveryEffective || 180
+  $('everyTxt').textContent = eff % 3600 === 0 ? `${eff / 3600} h` : `${Math.round(eff / 60)} minuto${eff === 60 ? '' : 's'}`
+  if (!everyEditing) {
+    const preset = ['0', '60', '300', '600'].includes(String(ev)) ? String(ev) : 'custom'
+    $('every').value = preset
+    $('everyCustom').hidden = preset !== 'custom'
+    if (preset === 'custom') {
+      const hours = ev % 3600 === 0
+      $('everyU').value = hours ? '3600' : '60'
+      $('everyN').value = hours ? ev / 3600 : Math.round(ev / 60)
+    }
+  }
   const u = s.appUpdate || {}
   $('appUpdRow').hidden = u.mode === 'store'
   $('appUpdStore').hidden = u.mode !== 'store'
@@ -204,6 +236,18 @@ $('pause').onclick = act(async () => call('/api/pause', { paused: $('pause').tex
 $('now').onclick = act(() => call('/api/upload-now', {}))
 $('addonNow').onclick = act(() => call('/api/addon/install', {}))
 $('addonAuto').onchange = act(() => call('/api/settings', { addonAutoUpdate: $('addonAuto').checked }))
+async function saveEvery(seconds) {
+  $('everyErr').hidden = true
+  try { render(await call('/api/settings', { uploadEverySeconds: seconds })); everyEditing = false }
+  catch (e) { $('everyErr').textContent = e.message; $('everyErr').hidden = false }
+}
+$('every').onchange = () => {
+  if ($('every').value === 'custom') { everyEditing = true; $('everyCustom').hidden = false; $('everyN').focus(); return }
+  $('everyCustom').hidden = true
+  saveEvery(Number($('every').value))
+}
+$('everyN').onfocus = () => (everyEditing = true)
+$('everySave').onclick = () => saveEvery(Math.round(Number($('everyN').value) * Number($('everyU').value)))
 $('appAuto').onchange = act(() => call('/api/settings', { appAutoUpdate: $('appAuto').checked }))
 $('appUpdNow').onclick = act(() => call('/api/app/update', {}))
 $('autostart').onchange = act(() => call('/api/settings', { autostart: $('autostart').checked }))
