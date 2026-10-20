@@ -1,4 +1,5 @@
-# Build de Rebirth Track Uploader en los runners del cluster Talos (x86, con Docker).
+# Build de Rebirth Track Uploader en runners de GitHub (gratis en repos públicos; x86 con Docker).
+# Los PRs de forks corren en máquinas descartables de GitHub y no ven los secrets.
 # - push/PR: compila, testea y arma el instalador SIN firmar (artefacto del job).
 # - tag vX.Y.Z: igual pero FIRMADO (environment "release", con aprobación), crea el GitHub
 #   Release y publica en el CDN (ast.rebirthknights.fun/uploader/) para la descarga desde la web.
@@ -19,11 +20,8 @@ concurrency:
 
 jobs:
   build:
-    # Repo público + runners propios: nunca correr código de PRs de forks en el cluster.
-    if: >-
-      ${{ !startsWith(github.ref, 'refs/tags/v') &&
-          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: talos-lab-mgaliano-lab
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build (sin firma)
@@ -38,7 +36,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: talos-lab-mgaliano-lab
+    runs-on: ubuntu-latest
     # Los secretos de firma viven solo en este environment (con revisor requerido).
     environment: release
     permissions:

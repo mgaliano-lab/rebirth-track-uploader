@@ -64,8 +64,8 @@ REBIRTH_TRACK_NO_BROWSER=1 go run ./cmd/rebirthtrack --headless --site http://lo
 
 ## CI y releases
 
-[`.github/workflows/build.yml`](.github/workflows/build.yml) corre en los runners del cluster Talos
-(`talos-lab-mgaliano-lab`).
+[`.github/workflows/build.yml`](.github/workflows/build.yml) corre en runners de GitHub
+(`ubuntu-latest`), gratis por ser un repo público.
 
 - **push / PR**: compila, corre los tests y arma el instalador **sin firmar** como artefacto.
 - **tag `vX.Y.Z`**, en el environment `release` (con revisor requerido):
