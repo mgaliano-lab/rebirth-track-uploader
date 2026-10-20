@@ -15,6 +15,7 @@ import (
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/api"
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/logs"
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/state"
+	"github.com/mgaliano-lab/rebirth-track-uploader/internal/update"
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/wow"
 )
 
@@ -36,20 +37,25 @@ type Linking struct {
 }
 
 type App struct {
-	Version  string
-	BaseURL  string
-	Store    *state.Store
-	OpenURL  func(string)
-	mu       sync.Mutex
-	activity []Activity
-	linking  *Linking
-	cfg      *api.Config
-	latest   *addon.Release
-	lastRun  time.Time
-	running  bool
-	uploaded int64
-	batches  int
-	wake     chan struct{}
+	Version   string
+	BaseURL   string
+	Store     *state.Store
+	OpenURL   func(string)
+	mu        sync.Mutex
+	activity  []Activity
+	linking   *Linking
+	cfg       *api.Config
+	latest    *addon.Release
+	lastRun   time.Time
+	running   bool
+	uploaded  int64
+	batches   int
+	wake      chan struct{}
+	appLatest *update.Release
+	updating  bool
+	Quit      func()          // cierra la app (la pone main); se usa al actualizarse
+	imports   map[string]bool // archivos viejos elegidos para importar; se aplican al empezar el ciclo
+	scans     map[string]scanCache
 }
 
 func New(version, baseURL string, st *state.Store, open func(string)) *App {
@@ -90,11 +96,12 @@ func (a *App) raidSet() map[int]bool {
 	return m
 }
 
-// Run es el bucle principal: sube cada batchEvery y revisa el addon cada 6 horas.
+// Run es el bucle principal: sube cada batchEvery y revisa el addon y la app cada 6 horas.
 func (a *App) Run(ctx context.Context) {
 	a.log("info", "Rebirth Track Uploader %s iniciado", a.Version)
 	a.refreshConfig()
 	a.CheckAddon(false)
+	go a.CheckApp(false)
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()
 	lastAddon := time.Now()
@@ -112,6 +119,7 @@ func (a *App) Run(ctx context.Context) {
 			if time.Since(lastAddon) > 6*time.Hour {
 				lastAddon = time.Now()
 				a.CheckAddon(false)
+				go a.CheckApp(false)
 			}
 		}
 	}
@@ -173,6 +181,7 @@ func (a *App) Cycle() {
 	if s.ConsentAt == nil || s.Token == "" || s.Paused {
 		return
 	}
+	a.applyImports()
 	if a.cfg == nil {
 		a.refreshConfig()
 	}
@@ -204,8 +213,9 @@ func (a *App) processFile(in wow.Install, f logs.File, consentAt time.Time, raid
 	isNew := p.Offset == 0 && p.Seq == 0 && p.SessionID == 0
 	if isNew {
 		if _, known := a.Store.Read().Files[key]; !known && f.ModTime.Before(consentAt) {
-			// Log viejo (anterior al consentimiento): solo se sube lo que se escriba de acá en adelante.
-			p.Offset = f.Size
+			// Log viejo (anterior al consentimiento): solo se sube lo que se escriba de acá en adelante
+			// (salvo que el usuario lo importe desde el panel).
+			p.Offset, p.Skipped = f.Size, true
 		}
 	}
 	if f.Size < p.Offset { // el archivo se truncó o se reemplazó
@@ -449,6 +459,7 @@ type Status struct {
 	Activity  []Activity      `json:"activity"`
 	Autostart bool            `json:"autostart"`
 	Packaged  bool            `json:"packaged"`
+	AppUpdate AppUpdate       `json:"appUpdate"`
 }
 
 func (a *App) Status() Status {
@@ -457,7 +468,7 @@ func (a *App) Status() Status {
 	st := Status{
 		Version: a.Version, SiteURL: a.BaseURL, Consent: s.ConsentAt != nil, Linked: s.Token != "",
 		UserName: s.UserName, Device: s.DeviceName, Paused: s.Paused, AddonAuto: s.AddonAuto, WowRoot: root,
-		Autostart: AutostartEnabled(), Packaged: Packaged(),
+		Autostart: AutostartEnabled(), Packaged: Packaged(), AppUpdate: a.appUpdateStatus(s),
 	}
 	if s.WowRoot != "" {
 		st.WowRoot = s.WowRoot

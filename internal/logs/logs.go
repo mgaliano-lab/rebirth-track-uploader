@@ -5,6 +5,7 @@
 package logs
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"os"
@@ -208,4 +209,51 @@ func FirstTimestamp(path string) *time.Time {
 		}
 	}
 	return nil
+}
+
+// Summary es lo que tiene de bandas un archivo entero, para elegir qué importar sin subir nada.
+type Summary struct {
+	Zones     []string // bandas, en orden de aparición
+	RaidBytes int64    // tamaño aproximado de lo que se subiría (antes de comprimir)
+}
+
+// Scan recorre el archivo hasta end con el mismo criterio que Filter, sin guardar las líneas.
+func Scan(path string, end int64, raidDifficulties map[int]bool) (Summary, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return Summary{}, err
+	}
+	defer f.Close()
+	var sum Summary
+	seen := map[string]bool{}
+	inRaid := false
+	r := bufio.NewReaderSize(io.LimitReader(f, end), 1<<20)
+	for {
+		line, err := r.ReadSlice('\n')
+		if err == bufio.ErrBufferFull { // línea gigante: se cuenta y se sigue
+			if inRaid {
+				sum.RaidBytes += int64(len(line))
+			}
+			continue
+		}
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			if event(line) == "ZONE_CHANGE" {
+				name, diff := zoneChange(line)
+				inRaid = raidDifficulties[diff]
+				if inRaid && !seen[name] {
+					seen[name] = true
+					sum.Zones = append(sum.Zones, name)
+				}
+			}
+			if inRaid {
+				sum.RaidBytes += int64(len(line))
+			}
+		}
+		if err == io.EOF {
+			return sum, nil
+		}
+		if err != nil {
+			return sum, err
+		}
+	}
 }

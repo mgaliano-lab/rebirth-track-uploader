@@ -19,7 +19,9 @@ type FileProgress struct {
 	Seq       int    `json:"seq"`
 	InRaid    bool   `json:"inRaid"`
 	Zone      string `json:"zone,omitempty"`
-	Header    string `json:"header,omitempty"` // línea COMBAT_LOG_VERSION, va al principio de la sesión
+	Header    string `json:"header,omitempty"`   // línea COMBAT_LOG_VERSION, va al principio de la sesión
+	Skipped   bool   `json:"skipped,omitempty"`  // era anterior al consentimiento y no se subió (se puede importar)
+	Imported  bool   `json:"imported,omitempty"` // el usuario pidió importarlo desde el principio
 }
 
 type State struct {
@@ -32,6 +34,7 @@ type State struct {
 	WowRoot    string                   `json:"wowRoot,omitempty"` // elegido a mano; vacío = detectar
 	Disabled   map[string]bool          `json:"disabledFlavors,omitempty"`
 	AddonAuto  bool                     `json:"addonAutoUpdate"`
+	AppAuto    bool                     `json:"appAutoUpdate"`
 	Files      map[string]*FileProgress `json:"files"`
 }
 
@@ -53,7 +56,7 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	st := &Store{path: filepath.Join(dir, "state.json"), s: State{AddonAuto: true}}
+	st := &Store{path: filepath.Join(dir, "state.json"), s: State{AddonAuto: true, AppAuto: true}}
 	b, err := os.ReadFile(st.path)
 	if err == nil {
 		if err := json.Unmarshal(b, &st.s); err != nil {

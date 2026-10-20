@@ -87,7 +87,11 @@ VIAddVersionKey "LegalCopyright" "© Rebirth Knights"
 
 Section "Rebirth Track Uploader (requerido)" SecApp
   SectionIn RO
-  ; Si estaba abierta, se cierra para poder reemplazar el ejecutable.
+  ; Si estaba abierta, se cierra para poder reemplazar el ejecutable. En una actualización
+  ; automática (/S) la app ya se está cerrando sola: se le da un momento para terminar el lote.
+  ${If} ${Silent}
+    Sleep 3000
+  ${EndIf}
   nsExec::Exec 'taskkill /IM "${EXE}" /F'
   Sleep 500
   SetOutPath "$INSTDIR"
@@ -116,6 +120,26 @@ SectionEnd
 Section "Acceso directo en el escritorio" SecDesktop
   CreateShortcut "$DESKTOP\${APP}.lnk" "$INSTDIR\${EXE}"
 SectionEnd
+
+; Actualización automática (la app corre el instalador nuevo con /S): se mantiene lo que el
+; usuario ya tenía (inicio con Windows y acceso directo) y al terminar se vuelve a abrir la app.
+Function .onInit
+  ${If} ${Silent}
+    ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "RebirthTrackUploader"
+    ${If} $0 == ""
+      SectionSetFlags ${SecAutostart} 0
+    ${EndIf}
+    ${IfNot} ${FileExists} "$DESKTOP\${APP}.lnk"
+      SectionSetFlags ${SecDesktop} 0
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+Function .onInstSuccess
+  ${If} ${Silent}
+    Exec '"$INSTDIR\${EXE}" --minimized'
+  ${EndIf}
+FunctionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${SecApp} "La app (bandeja del sistema + panel local)."

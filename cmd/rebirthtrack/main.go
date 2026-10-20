@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 
 	"fyne.io/systray"
 
@@ -36,7 +37,9 @@ func main() {
 	headless := flag.Bool("headless", false, "sin ícono en la bandeja (pruebas)")
 	site := flag.String("site", envOr("REBIRTH_TRACK_SITE", "https://rebirthknights.fun"), "URL de Rebirth Track")
 	dir := flag.String("state-dir", "", "carpeta de datos (por defecto, la de configuración del usuario)")
+	afterUpdate := flag.Bool("after-update", false, "la lanzó la versión anterior al actualizarse: esperar a que libere el panel")
 	flag.Parse()
+	app.CleanupUpdate()
 
 	stateDir := *dir
 	if stateDir == "" {
@@ -56,6 +59,10 @@ func main() {
 
 	a := app.New(version, *site, st, openURL)
 	srv, err := ui.Listen(a, stateDir)
+	for i := 0; *afterUpdate && errors.Is(err, ui.ErrRunning) && i < 40; i++ {
+		time.Sleep(500 * time.Millisecond) // la versión vieja todavía está cerrando
+		srv, err = ui.Listen(a, stateDir)
+	}
 	if errors.Is(err, ui.ErrRunning) {
 		openURL(ui.RunningURL(stateDir)) // ya estaba abierta: mostrar su panel
 		return
@@ -69,6 +76,12 @@ func main() {
 		}
 	}()
 
+	sig := make(chan os.Signal, 1)
+	if *headless {
+		a.Quit = func() { sig <- os.Interrupt }
+	} else {
+		a.Quit = systray.Quit
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { a.Run(ctx); close(done) }()
@@ -78,7 +91,6 @@ func main() {
 	quit := func() { cancel(); <-done }
 
 	if *headless {
-		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 		fmt.Println("Panel:", srv.URL())
 		<-sig

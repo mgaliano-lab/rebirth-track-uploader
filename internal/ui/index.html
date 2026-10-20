@@ -39,6 +39,11 @@
   input[type=text] { background:#000; color:var(--text); border:1px solid var(--border); border-radius:5px; padding:7px 10px; min-width:0; }
   label { display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
   .err { color:var(--bad); }
+  .old li { display:grid; grid-template-columns:auto 1fr auto; gap:4px 10px; align-items:start; padding:8px; border-radius:5px; background:rgba(0,0,0,.25); }
+  .old li.off { opacity:.55; }
+  .old .zones { grid-column:2 / 4; font-size:.85rem; }
+  .bar { height:4px; background:rgba(255,255,255,.1); border-radius:2px; overflow:hidden; grid-column:2 / 4; }
+  .bar span { display:block; height:100%; background:var(--ok); }
 </style>
 </head>
 <body>
@@ -108,7 +113,27 @@
       <button id="pause"></button>
     </div>
     <div class="row small" style="margin-top:10px" id="autostartRow"><label><input type="checkbox" id="autostart" /> Iniciar con Windows (minimizada en la bandeja)</label></div>
+    <div class="row small" style="margin-top:10px" id="appUpdRow">
+      <label><input type="checkbox" id="appAuto" /> Actualizar la app sola</label>
+      <span class="dim grow" id="appUpdInfo"></span>
+      <button class="ghost" id="appUpdNow">Buscar actualización</button>
+    </div>
+    <p class="dim small" id="appUpdStore" hidden>La app se actualiza sola desde la Microsoft Store.</p>
     <p class="dim small" id="autostartStore" hidden>Inicio con Windows: activalo o desactivalo en Configuración › Aplicaciones › Inicio (Rebirth Track Uploader).</p>
+  </section>
+
+  <section id="importSec" hidden>
+    <h2>Registros anteriores</h2>
+    <p class="dim small">Lo que WoW registró antes de que aceptaras no se sube solo. Elegí cuáles importar: se sube <b>solo lo de bandas</b>, igual que siempre.</p>
+    <div class="row"><button class="ghost" id="oldLoad">Buscar registros anteriores</button><span class="dim small" id="oldInfo"></span></div>
+    <div id="oldBox" hidden style="margin-top:10px">
+      <ul class="clean old" id="oldList"></ul>
+      <div class="row" style="margin-top:10px">
+        <label class="small"><input type="checkbox" id="oldAll" /> Elegir todos los que tienen bandas</label>
+        <span class="grow"></span>
+        <button id="oldImport" disabled>Importar elegidos</button>
+      </div>
+    </div>
   </section>
 
   <section>
@@ -139,6 +164,7 @@ function render(s) {
   else { pill.textContent = 'Activa'; pill.className = 'pill ok' }
   $('consentRow').hidden = s.consent
   for (const id of ['account', 'wow', 'upload']) $(id).hidden = !s.consent
+  $('importSec').hidden = !(s.consent && s.linked)
   $('linked').hidden = !s.linked
   $('unlinked').hidden = s.linked
   $('user').textContent = s.userName; $('device').textContent = s.deviceName
@@ -156,6 +182,13 @@ function render(s) {
   $('autostart').checked = s.autostart
   $('autostartRow').hidden = s.packaged
   $('autostartStore').hidden = !s.packaged
+  const u = s.appUpdate || {}
+  $('appUpdRow').hidden = u.mode === 'store'
+  $('appUpdStore').hidden = u.mode !== 'store'
+  $('appAuto').checked = !!u.auto
+  $('appUpdInfo').textContent = u.updating ? 'Actualizando…' : u.available ? `Hay una versión nueva: v${u.latest}` : u.latest ? `Al día (última v${u.latest})` : ''
+  $('appUpdNow').textContent = u.available ? `Actualizar a v${u.latest}` : 'Buscar actualización'
+  $('appUpdNow').disabled = !!u.updating
   $('pause').textContent = s.paused ? 'Reanudar' : 'Pausar'
   $('uploadInfo').innerHTML = s.linked
     ? `Último ciclo ${fmt(s.lastRun)} · próximo ${fmt(s.nextRun)} · subidos en esta sesión: <b>${kb(s.uploadedBytes)}</b> en ${s.batches} lote(s)`
@@ -171,10 +204,49 @@ $('pause').onclick = act(async () => call('/api/pause', { paused: $('pause').tex
 $('now').onclick = act(() => call('/api/upload-now', {}))
 $('addonNow').onclick = act(() => call('/api/addon/install', {}))
 $('addonAuto').onchange = act(() => call('/api/settings', { addonAutoUpdate: $('addonAuto').checked }))
+$('appAuto').onchange = act(() => call('/api/settings', { appAutoUpdate: $('appAuto').checked }))
+$('appUpdNow').onclick = act(() => call('/api/app/update', {}))
 $('autostart').onchange = act(() => call('/api/settings', { autostart: $('autostart').checked }))
 $('root').onfocus = () => (rootEditing = true)
 $('saveRoot').onclick = async () => { $('rootErr').hidden = true; try { render(await call('/api/settings', { wowRoot: $('root').value })); rootEditing = false } catch (e) { $('rootErr').textContent = e.message; $('rootErr').hidden = false } }
 $('flavors').onchange = (e) => { const f = e.target.dataset?.flavor; if (f) act(() => call('/api/settings', { flavor: f, enabled: e.target.checked }))() }
+// ── Registros anteriores ──
+const day = (d) => d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : '—'
+const STATUS = { empty: 'Sin bandas', partial: 'Ya se está subiendo lo nuevo de este archivo', queued: 'En cola…', importing: 'Importando', imported: 'Importado ✓' }
+let oldShown = false
+const picked = new Set()
+async function loadOld() {
+  $('oldInfo').textContent = 'Revisando archivos…'
+  try {
+    const list = await call('/api/old-logs')
+    oldShown = true
+    $('oldBox').hidden = !list.length
+    const withRaid = list.filter((o) => o.status === 'available')
+    $('oldInfo').textContent = list.length ? `${list.length} archivo(s) · ${withRaid.length} con bandas para importar` : 'No hay registros anteriores.'
+    for (const k of [...picked]) if (!withRaid.some((o) => o.key === k)) picked.delete(k)
+    $('oldList').innerHTML = list.map((o) => {
+      const can = o.status === 'available'
+      const st = can ? `<span class="small">${kb(o.raidBytes)} de banda</span>` : `<span class="small ${o.status === 'imported' ? '' : 'dim'}">${STATUS[o.status] || ''}${o.status === 'importing' ? ' ' + Math.round(o.progress * 100) + '%' : ''}</span>`
+      return `<li class="${can || o.status !== 'empty' ? '' : 'off'}">
+        <input type="checkbox" data-key="${esc(o.key)}" ${can ? '' : 'disabled'} ${picked.has(o.key) ? 'checked' : ''} />
+        <span><b>${esc(o.install)}</b> · ${day(o.firstLineAt || o.modifiedAt)} <span class="dim small">→ ${day(o.modifiedAt)} · ${kb(o.size)} · ${esc(o.name)}</span></span>
+        ${st}
+        <span class="zones dim">${o.zones.length ? esc(o.zones.join(' · ')) : 'Ninguna banda en este archivo'}</span>
+        ${o.status === 'importing' ? `<div class="bar"><span style="width:${Math.round(o.progress * 100)}%"></span></div>` : ''}
+      </li>`
+    }).join('')
+    $('oldAll').checked = withRaid.length > 0 && withRaid.every((o) => picked.has(o.key))
+    $('oldImport').disabled = picked.size === 0
+    $('oldImport').textContent = picked.size ? `Importar ${picked.size} elegido(s)` : 'Importar elegidos'
+    if (list.some((o) => o.status === 'queued' || o.status === 'importing')) setTimeout(loadOld, 3000)
+  } catch (e) { $('oldInfo').textContent = e.message }
+}
+$('oldLoad').onclick = loadOld
+$('oldList').onchange = (e) => { const k = e.target.dataset?.key; if (!k) return; e.target.checked ? picked.add(k) : picked.delete(k); loadOld() }
+$('oldAll').onchange = () => { for (const cb of $('oldList').querySelectorAll('input[data-key]:not(:disabled)')) $('oldAll').checked ? picked.add(cb.dataset.key) : picked.delete(cb.dataset.key); loadOld() }
+$('oldImport').onclick = async () => {
+  try { await call('/api/old-logs/import', { keys: [...picked] }); picked.clear(); loadOld(); refresh() } catch (e) { alert(e.message) }
+}
 refresh(); setInterval(refresh, 3000)
 </script>
 </body>

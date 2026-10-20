@@ -121,6 +121,23 @@ func (s *Server) Serve() error {
 		return a.Status(), nil
 	})
 	api("POST /api/upload-now", func(r *http.Request) (any, error) { a.UploadNow(); return a.Status(), nil })
+	api("GET /api/old-logs", func(r *http.Request) (any, error) { return a.OldLogs() })
+	api("POST /api/old-logs/import", func(r *http.Request) (any, error) {
+		var keys []string
+		if list, ok := body(r)["keys"].([]any); ok {
+			for _, k := range list {
+				if s, ok := k.(string); ok {
+					keys = append(keys, s)
+				}
+			}
+		}
+		n, err := a.ImportLogs(keys)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]int{"queued": n}, nil
+	})
+	api("POST /api/app/update", func(r *http.Request) (any, error) { go a.CheckApp(true); return a.Status(), nil })
 	api("POST /api/addon/install", func(r *http.Request) (any, error) { a.CheckAddon(true); return a.Status(), nil })
 	api("POST /api/settings", func(r *http.Request) (any, error) {
 		b := body(r)
@@ -135,6 +152,9 @@ func (s *Server) Serve() error {
 		}
 		if v, ok := b["addonAutoUpdate"].(bool); ok {
 			a.SetAddonAuto(v)
+		}
+		if v, ok := b["appAutoUpdate"].(bool); ok {
+			a.SetAppAuto(v)
 		}
 		if v, ok := b["autostart"].(bool); ok {
 			if err := app.SetAutostart(v); err != nil {

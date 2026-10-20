@@ -88,3 +88,24 @@ func TestList(t *testing.T) {
 		t.Fatalf("esperaba 2 logs, hay %d", len(fs))
 	}
 }
+
+func TestScanSummarizesRaids(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "WoWCombatLog.txt")
+	if err := os.WriteFile(path, []byte(sample), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := Scan(path, int64(len(sample)), raid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sum.Zones) != 1 || sum.Zones[0] != "Karazhan" {
+		t.Errorf("bandas: %v", sum.Zones)
+	}
+	want := int64(len(string(Filter([]byte(sample), false, "", raid).Data)))
+	if sum.RaidBytes != want {
+		t.Errorf("bytes de banda %d, quería %d", sum.RaidBytes, want)
+	}
+	if sum, _ := Scan(path, 100, raid); len(sum.Zones) != 0 {
+		t.Errorf("con end corto no debería ver bandas: %v", sum.Zones)
+	}
+}
