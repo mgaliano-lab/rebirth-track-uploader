@@ -138,6 +138,18 @@ func (s *Server) Serve() error {
 		return map[string]int{"queued": n}, nil
 	})
 	api("POST /api/app/update", func(r *http.Request) (any, error) { go a.CheckApp(true); return a.Status(), nil })
+	api("POST /api/wow/browse", func(r *http.Request) (any, error) {
+		if _, err := a.BrowseWowRoot(); err != nil {
+			return nil, err
+		}
+		return a.Status(), nil
+	})
+	api("POST /api/wow/locate", func(r *http.Request) (any, error) {
+		if _, err := a.LocateWow(); err != nil {
+			return nil, err
+		}
+		return a.Status(), nil
+	})
 	api("POST /api/addon/install", func(r *http.Request) (any, error) { a.CheckAddon(true); return a.Status(), nil })
 	api("POST /api/settings", func(r *http.Request) (any, error) {
 		b := body(r)

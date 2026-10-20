@@ -106,7 +106,9 @@ func main() {
 		systray.SetTitle("")
 		systray.SetTooltip("Rebirth Track Uploader")
 		mOpen := systray.AddMenuItem("Abrir panel", "Ver qué hace y qué sube la app")
+		mNow := systray.AddMenuItem("Subir ahora", "Subir ya lo pendiente sin esperar al próximo ciclo")
 		mPause := systray.AddMenuItem("Pausar subida", "Dejar de subir hasta que la reanudes")
+		mSite := systray.AddMenuItem("Abrir rebirthknights.fun", "Ver las raids y los registros en la web")
 		systray.AddSeparator()
 		mQuit := systray.AddMenuItem("Salir", "Cerrar la app (sube lo pendiente antes de cerrar)")
 		syncPause := func() {
@@ -123,6 +125,10 @@ func main() {
 				select {
 				case <-mOpen.ClickedCh:
 					openURL(srv.URL())
+				case <-mNow.ClickedCh:
+					a.UploadNow()
+				case <-mSite.ClickedCh:
+					openURL(a.BaseURL)
 				case <-mPause.ClickedCh:
 					a.SetPaused(!st.Read().Paused)
 					syncPause()

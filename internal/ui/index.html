@@ -45,6 +45,24 @@
   .old .zones { grid-column:2 / 4; font-size:.85rem; }
   .bar { height:4px; background:rgba(255,255,255,.1); border-radius:2px; overflow:hidden; grid-column:2 / 4; }
   .bar span { display:block; height:100%; background:var(--ok); }
+  /* Barra de accesos */
+  .tools { display:flex; gap:6px; flex-wrap:wrap; }
+  .tool { position:relative; width:38px; height:38px; padding:0; display:grid; place-items:center; font-size:1.05rem; background:#140906; border:1px solid var(--border); color:var(--text); }
+  .tool:hover:not(:disabled), .tool:focus-visible { border-color:var(--gold); outline:none; }
+  .tool.on { border-color:var(--warn); color:var(--warn); }
+  [data-tip]::after { content:attr(data-tip); position:absolute; top:calc(100% + 8px); right:0; z-index:5; white-space:nowrap; background:#000; color:var(--text);
+    border:1px solid var(--gold); border-radius:5px; padding:5px 9px; font:500 .78rem/1.3 system-ui,sans-serif; opacity:0; pointer-events:none; transform:translateY(-3px); transition:opacity .12s, transform .12s; }
+  [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity:1; transform:none; }
+  kbd { font:600 .72rem ui-monospace,monospace; border:1px solid #6b5a3a; border-bottom-width:2px; border-radius:4px; padding:0 4px; color:var(--gold); }
+  /* Pestañas */
+  nav.tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); overflow-x:auto; }
+  nav.tabs button { background:transparent; border:1px solid transparent; border-bottom:0; border-radius:6px 6px 0 0; color:var(--dim); padding:8px 14px; font-weight:600; white-space:nowrap; }
+  nav.tabs button.on { background:var(--panel); border-color:var(--border); color:var(--gold); margin-bottom:-1px; }
+  nav.tabs button .n { font-size:.72rem; color:var(--dim); margin-left:4px; }
+  .tab { display:flex; flex-direction:column; gap:16px; }
+  .tab[hidden] { display:none !important; }
+  .hdr-right { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .hint { font-size:.75rem; color:var(--dim); text-align:right; }
 </style>
 </head>
 <body>
@@ -52,9 +70,26 @@
   <header>
     <img src="/icon.png" alt="" />
     <div><h1>Rebirth Track Uploader</h1><div class="dim small" id="ver"></div></div>
-    <span class="pill" id="pill">…</span>
+    <div class="hdr-right">
+      <span class="pill" id="pill">…</span>
+      <div class="tools" id="tools" hidden>
+        <button class="tool" id="tNow" data-tip="Subir ahora · U" aria-label="Subir ahora (U)">⬆️</button>
+        <button class="tool" id="tPause" data-tip="Pausar subida · P" aria-label="Pausar (P)">⏸️</button>
+        <button class="tool" id="tAddon" data-tip="Instalar/actualizar addon · A" aria-label="Actualizar addon (A)">🧩</button>
+        <button class="tool" id="tUpd" data-tip="Buscar actualización de la app · B" aria-label="Buscar actualización (B)">🔄</button>
+        <button class="tool" id="tSite" data-tip="Abrir rebirthknights.fun · W" aria-label="Abrir el sitio (W)">🌐</button>
+      </div>
+    </div>
   </header>
+  <nav class="tabs" id="tabs" hidden role="tablist">
+    <button data-tab="home" role="tab">Inicio <span class="n">1</span></button>
+    <button data-tab="wow" role="tab">World of Warcraft <span class="n">2</span></button>
+    <button data-tab="old" role="tab">Registros anteriores <span class="n">3</span></button>
+    <button data-tab="cfg" role="tab">Cuenta y app <span class="n">4</span></button>
+    <button data-tab="what" role="tab">Qué hace <span class="n">5</span></button>
+  </nav>
 
+  <div class="tab" data-pane="what">
   <section id="what">
     <h2>Qué hace esta app</h2>
     <div class="what">
@@ -78,7 +113,9 @@
     <p class="dim small">Podés pausar la subida cuando quieras, ver todo lo que subiste y borrarlo desde la web (Mis personajes → Mis PCs), o desvincular esta PC. <a id="privacy" target="_blank" rel="noopener">Política de privacidad</a>.</p>
     <div class="row" id="consentRow" hidden><button id="consent">Entiendo y acepto</button><span class="dim small">Hasta que aceptes, la app no lee ni sube nada.</span></div>
   </section>
+  </div>
 
+  <div class="tab" data-pane="cfg" hidden>
   <section id="account" hidden>
     <h2>Cuenta</h2>
     <div id="linked" hidden class="row">
@@ -95,9 +132,30 @@
     </div>
   </section>
 
+  <section id="appSec">
+    <h2>App</h2>
+    <div class="row small" id="autostartRow"><label><input type="checkbox" id="autostart" /> Iniciar con Windows (minimizada en la bandeja)</label></div>
+    <p class="dim small" id="autostartStore" hidden>Inicio con Windows: activalo o desactivalo en Configuración › Aplicaciones › Inicio (Rebirth Track Uploader).</p>
+    <div class="row small" style="margin-top:10px" id="appUpdRow">
+      <label><input type="checkbox" id="appAuto" /> Actualizar la app sola</label>
+      <span class="dim grow" id="appUpdInfo"></span>
+      <button class="ghost" id="appUpdNow">Buscar actualización</button>
+    </div>
+    <p class="dim small" id="appUpdStore" hidden>La app se actualiza sola desde la Microsoft Store.</p>
+    <p class="hint" style="text-align:left;margin:10px 0 0">Atajos: <kbd>U</kbd> subir ahora · <kbd>P</kbd> pausar · <kbd>A</kbd> addon · <kbd>B</kbd> buscar actualización · <kbd>W</kbd> sitio · <kbd>1</kbd>–<kbd>5</kbd> pestañas</p>
+  </section>
+  </div>
+
+  <div class="tab" data-pane="wow" hidden>
   <section id="wow" hidden>
     <h2>World of Warcraft</h2>
-    <div class="row small"><span class="dim">Carpeta:</span><input type="text" id="root" class="grow" /><button class="ghost" id="saveRoot">Usar esta carpeta</button></div>
+    <div class="row small"><span class="dim">Carpeta:</span><input type="text" id="root" class="grow" placeholder="C:\Program Files (x86)\World of Warcraft" /></div>
+    <div class="row small" style="margin-top:8px">
+      <button class="ghost" id="browseRoot" title="Abrir el selector de carpetas de Windows">📁 Elegir carpeta…</button>
+      <button class="ghost" id="locateRoot" title="Buscar World of Warcraft en todos los discos">🔍 Autoubicar</button>
+      <button class="ghost" id="saveRoot">Usar la ruta escrita</button>
+      <span class="dim" id="rootBusy"></span>
+    </div>
     <p class="err small" id="rootErr" hidden></p>
     <ul class="clean" id="flavors" style="margin-top:10px"></ul>
     <div class="row small" style="margin-top:10px">
@@ -105,7 +163,9 @@
       <button class="ghost" id="addonNow">Instalar/actualizar addon ahora</button>
     </div>
   </section>
+  </div>
 
+  <div class="tab" data-pane="home" hidden>
   <section id="upload" hidden>
     <h2>Subida</h2>
     <div class="row">
@@ -130,16 +190,15 @@
       <span class="err" id="everyErr" hidden></span>
     </div>
     <p class="dim small" style="margin:4px 0 0">Más seguido = ves la banda en la web casi en vivo. Más espaciado = menos subidas (lo pendiente se sube igual al cerrar la app).</p>
-    <div class="row small" style="margin-top:10px" id="autostartRow"><label><input type="checkbox" id="autostart" /> Iniciar con Windows (minimizada en la bandeja)</label></div>
-    <div class="row small" style="margin-top:10px" id="appUpdRow">
-      <label><input type="checkbox" id="appAuto" /> Actualizar la app sola</label>
-      <span class="dim grow" id="appUpdInfo"></span>
-      <button class="ghost" id="appUpdNow">Buscar actualización</button>
-    </div>
-    <p class="dim small" id="appUpdStore" hidden>La app se actualiza sola desde la Microsoft Store.</p>
-    <p class="dim small" id="autostartStore" hidden>Inicio con Windows: activalo o desactivalo en Configuración › Aplicaciones › Inicio (Rebirth Track Uploader).</p>
   </section>
 
+  <section>
+    <h2>Actividad</h2>
+    <ul class="clean act" id="activity"></ul>
+  </section>
+  </div>
+
+  <div class="tab" data-pane="old" hidden>
   <section id="importSec" hidden>
     <h2>Registros anteriores</h2>
     <p class="dim small">Lo que WoW registró antes de que aceptaras (o lo que una versión anterior de la app leyó sin las mazmorras) no se sube solo. Elegí cuáles importar: se sube <b>solo lo de bandas y mazmorras</b>, igual que siempre.</p>
@@ -153,11 +212,7 @@
       </div>
     </div>
   </section>
-
-  <section>
-    <h2>Actividad</h2>
-    <ul class="clean act" id="activity"></ul>
-  </section>
+  </div>
 </main>
 <script>
 const K = new URLSearchParams(location.search).get('k')
@@ -171,6 +226,17 @@ async function call(path, body) {
 const fmt = (d) => d ? new Date(d).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }) : '—'
 const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB'
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
+// ── Pestañas ──
+let tab = (() => { try { return localStorage.getItem('rt-tab') || 'home' } catch { return 'home' } })()
+let last = null
+function showTab(t) {
+  tab = t
+  try { localStorage.setItem('rt-tab', t) } catch {}
+  for (const b of document.querySelectorAll('#tabs button')) b.classList.toggle('on', b.dataset.tab === t)
+  for (const p of document.querySelectorAll('.tab')) p.hidden = p.dataset.pane !== t
+  if (t === 'old' && !oldShown && last?.linked) loadOld()
+}
+$('tabs').onclick = (e) => { const t = e.target.closest('button')?.dataset.tab; if (t) showTab(t) }
 let rootEditing = false
 let everyEditing = false
 function render(s) {
@@ -182,6 +248,17 @@ function render(s) {
   else if (s.paused) { pill.textContent = 'En pausa'; pill.className = 'pill warn' }
   else { pill.textContent = 'Activa'; pill.className = 'pill ok' }
   $('consentRow').hidden = s.consent
+  const first = !last
+  last = s
+  // Sin aceptar: solo "Qué hace". Sin vincular: la pestaña de cuenta.
+  $('tabs').hidden = !s.consent
+  $('tools').hidden = !s.consent || !s.linked
+  if (!s.consent) { for (const p of document.querySelectorAll('.tab')) p.hidden = p.dataset.pane !== 'what' }
+  else if (first) showTab(s.linked ? tab : 'cfg')
+  $('tPause').textContent = s.paused ? '▶️' : '⏸️'
+  $('tPause').dataset.tip = s.paused ? 'Reanudar subida · P' : 'Pausar subida · P'
+  $('tPause').classList.toggle('on', s.paused)
+  $('tUpd').hidden = s.appUpdate?.mode === 'store'
   for (const id of ['account', 'wow', 'upload']) $(id).hidden = !s.consent
   $('importSec').hidden = !(s.consent && s.linked)
   $('linked').hidden = !s.linked
@@ -252,6 +329,14 @@ $('appAuto').onchange = act(() => call('/api/settings', { appAutoUpdate: $('appA
 $('appUpdNow').onclick = act(() => call('/api/app/update', {}))
 $('autostart').onchange = act(() => call('/api/settings', { autostart: $('autostart').checked }))
 $('root').onfocus = () => (rootEditing = true)
+async function rootAct(path, label) {
+  $('rootErr').hidden = true
+  $('rootBusy').textContent = label
+  try { render(await call(path, {})); rootEditing = false } catch (e) { $('rootErr').textContent = e.message; $('rootErr').hidden = false }
+  $('rootBusy').textContent = ''
+}
+$('browseRoot').onclick = () => rootAct('/api/wow/browse', 'Elegí la carpeta en la ventana que se abrió…')
+$('locateRoot').onclick = () => rootAct('/api/wow/locate', 'Buscando en los discos…')
 $('saveRoot').onclick = async () => { $('rootErr').hidden = true; try { render(await call('/api/settings', { wowRoot: $('root').value })); rootEditing = false } catch (e) { $('rootErr').textContent = e.message; $('rootErr').hidden = false } }
 $('flavors').onchange = (e) => { const f = e.target.dataset?.flavor; if (f) act(() => call('/api/settings', { flavor: f, enabled: e.target.checked }))() }
 // ── Registros anteriores ──
@@ -291,6 +376,20 @@ $('oldAll').onchange = () => { for (const cb of $('oldList').querySelectorAll('i
 $('oldImport').onclick = async () => {
   try { await call('/api/old-logs/import', { keys: [...picked] }); picked.clear(); loadOld(); refresh() } catch (e) { alert(e.message) }
 }
+// ── Barra de accesos y atajos ──
+$('tNow').onclick = act(() => call('/api/upload-now', {}))
+$('tPause').onclick = act(() => call('/api/pause', { paused: !last?.paused }))
+$('tAddon').onclick = act(() => call('/api/addon/install', {}))
+$('tUpd').onclick = act(() => call('/api/app/update', {}))
+$('tSite').onclick = () => window.open(last?.siteUrl || 'https://rebirthknights.fun', '_blank', 'noopener')
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || !last?.consent) return
+  const k = e.key.toLowerCase()
+  const tabs = { 1: 'home', 2: 'wow', 3: 'old', 4: 'cfg', 5: 'what' }
+  if (tabs[k]) { showTab(tabs[k]); return }
+  const btn = { u: 'tNow', p: 'tPause', a: 'tAddon', b: 'tUpd', w: 'tSite' }[k]
+  if (btn && last?.linked && !$(btn).hidden) { e.preventDefault(); $(btn).click() }
+})
 refresh(); setInterval(refresh, 3000)
 </script>
 </body>

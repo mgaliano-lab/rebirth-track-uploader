@@ -409,12 +409,50 @@ func (a *App) SetFlavor(flavor string, enabled bool) {
 
 func (a *App) SetWowRoot(dir string) error {
 	if dir != "" {
+		dir = wow.Normalize(dir)
 		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 			return fmt.Errorf("no existe la carpeta %s", dir)
 		}
 	}
 	a.Store.Update(func(s *state.State) { s.WowRoot = dir })
+	if _, ins := wow.Detect(dir); dir != "" && len(ins) == 0 {
+		a.log("error", "En %s no encontré versiones de WoW (_retail_, _anniversary_, _classic_era_…).", dir)
+	}
 	return nil
+}
+
+// BrowseWowRoot abre el selector de carpetas del sistema y, si se eligió una, la usa.
+func (a *App) BrowseWowRoot() (bool, error) {
+	start, _ := a.Installs()
+	if s := a.Store.Read().WowRoot; s != "" {
+		start = s
+	}
+	dir, err := pickFolder(start)
+	if err != nil {
+		return false, fmt.Errorf("no se pudo abrir el selector: %v", err)
+	}
+	if dir == "" {
+		return false, nil // cancelado
+	}
+	return true, a.SetWowRoot(dir)
+}
+
+// LocateWow busca WoW en los discos y usa la instalación con más versiones.
+func (a *App) LocateWow() (string, error) {
+	found := wow.Locate()
+	if len(found) == 0 {
+		return "", fmt.Errorf("no encontré World of Warcraft en los lugares habituales: elegí la carpeta a mano")
+	}
+	if err := a.SetWowRoot(found[0]); err != nil {
+		return "", err
+	}
+	_, ins := wow.Detect(found[0])
+	names := make([]string, len(ins))
+	for i, in := range ins {
+		names[i] = in.Label
+	}
+	a.log("info", "Encontré World of Warcraft en %s (%s).", found[0], strings.Join(names, ", "))
+	return found[0], nil
 }
 
 // SetEvery fija cada cuánto se sube (0 = el valor del sitio).
