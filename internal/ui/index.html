@@ -67,7 +67,7 @@
         </ul>
       </div>
     </div>
-    <p class="dim small">Podés pausar la subida cuando quieras, ver todo lo que subiste y borrarlo desde la web (Mis personajes → Mis PCs), o desvincular esta PC.</p>
+    <p class="dim small">Podés pausar la subida cuando quieras, ver todo lo que subiste y borrarlo desde la web (Mis personajes → Mis PCs), o desvincular esta PC. <a id="privacy" target="_blank" rel="noopener">Política de privacidad</a>.</p>
     <div class="row" id="consentRow" hidden><button id="consent">Entiendo y acepto</button><span class="dim small">Hasta que aceptes, la app no lee ni sube nada.</span></div>
   </section>
 
@@ -129,6 +129,7 @@ function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp
 let rootEditing = false
 function render(s) {
   $('ver').textContent = 'v' + s.version + ' · ' + s.siteUrl
+  $('privacy').href = s.siteUrl + '/privacidad'
   const pill = $('pill')
   if (!s.consent) { pill.textContent = 'Esperando tu aceptación'; pill.className = 'pill warn' }
   else if (!s.linked) { pill.textContent = 'Sin vincular'; pill.className = 'pill warn' }

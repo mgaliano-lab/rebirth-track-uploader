@@ -16,8 +16,12 @@ $parts = $num.Split('.')
 while ($parts.Count -lt 3) { $parts += '0' }
 $msixVersion = "$($parts[0]).$($parts[1]).$($parts[2]).0"
 
-$sdk = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+# La versión más nueva del Windows SDK que trae makeappx Y makepri (no todas las carpetas los tienen).
+$sdk = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64" -Directory |
+  Where-Object { (Test-Path (Join-Path $_.FullName "makeappx.exe")) -and (Test-Path (Join-Path $_.FullName "makepri.exe")) } |
+  Sort-Object { [version]($_.Parent.Name) } -Descending | Select-Object -First 1
 if (-not $sdk) { throw "No encontré el Windows SDK (makeappx/makepri)" }
+Write-Host "Windows SDK: $($sdk.FullName)"
 $makeappx = Join-Path $sdk.FullName "makeappx.exe"
 $makepri = Join-Path $sdk.FullName "makepri.exe"
 

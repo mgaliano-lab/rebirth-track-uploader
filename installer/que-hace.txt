@@ -35,4 +35,5 @@ TU CONTROL
 • Al desinstalar se quitan la app y el inicio automático, y opcionalmente la configuración.
   El addon queda en WoW: se borra quitando la carpeta Interface\AddOns\RebirthTrack.
 
-Código fuente y contacto: https://rebirthknights.fun
+Política de privacidad: https://rebirthknights.fun/privacidad
+Código fuente: https://github.com/mgaliano-lab/rebirth-track-uploader
