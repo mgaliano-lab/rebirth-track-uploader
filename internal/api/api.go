@@ -109,12 +109,14 @@ func (c *Client) PollLink(deviceCode string) (LinkResult, error) {
 }
 
 type Config struct {
-	UserName         string `json:"userName"`
-	DeviceName       string `json:"deviceName"`
-	BatchSeconds     int    `json:"batchSeconds"`
-	RaidDifficulties []int  `json:"raidDifficulties"`
-	AddonLatestURL   string `json:"addonLatestUrl"`
-	SiteURL          string `json:"siteUrl"`
+	UserName            string `json:"userName"`
+	DeviceName          string `json:"deviceName"`
+	BatchSeconds        int    `json:"batchSeconds"`
+	RaidDifficulties    []int  `json:"raidDifficulties"`
+	DungeonDifficulties []int  `json:"dungeonDifficulties"`
+	InstanceMaps        []int  `json:"instanceMaps"`
+	AddonLatestURL      string `json:"addonLatestUrl"`
+	SiteURL             string `json:"siteUrl"`
 }
 
 func (c *Client) Config() (Config, error) {

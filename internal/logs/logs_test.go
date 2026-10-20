@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-var raid = map[int]bool{3: true, 4: true, 14: true, 15: true, 16: true}
+var raid = Instances{Difficulties: map[int]bool{3: true, 4: true, 14: true, 15: true, 16: true, 1: true}, Maps: map[int]bool{389: true}}
 
 const sample = `10/24/2026 20:55:00.000-3  COMBAT_LOG_VERSION,20,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,2.5.5,PROJECT_ID,5
 10/24/2026 20:55:01.000-3  ZONE_CHANGE,530,"Península del Fuego Infernal",0
@@ -107,5 +107,35 @@ func TestScanSummarizesRaids(t *testing.T) {
 	}
 	if sum, _ := Scan(path, 100, raid); len(sum.Zones) != 0 {
 		t.Errorf("con end corto no debería ver bandas: %v", sum.Zones)
+	}
+}
+
+func TestFilterDungeons(t *testing.T) {
+	// Sima Ígnea (TBC Anniversary): la primera vez con dificultad 1, la segunda con 0.
+	log := `10/20/2026 17:32:16.307-3  ZONE_CHANGE,1,"Orgrimmar",0
+10/20/2026 17:32:17.000-3  SPELL_DAMAGE,Player-1-A,"Yo",0x511,0x0,Creature-0-3,"Peón",0x10a48,0x0,1,"Golpe",1
+10/20/2026 17:33:00.728-3  ZONE_CHANGE,389,"Ragefire Chasm",1
+10/20/2026 17:33:01.000-3  SPELL_DAMAGE,Player-1-A,"Yo",0x511,0x0,Creature-0-4,"Taragaman",0x10a48,0x0,1,"Golpe",1
+10/20/2026 17:40:06.158-3  ZONE_CHANGE,1,"Orgrimmar",0
+10/20/2026 18:20:40.819-3  ZONE_CHANGE,389,"Ragefire Chasm",0
+10/20/2026 18:20:41.000-3  SPELL_DAMAGE,Player-1-A,"Yo",0x511,0x0,Creature-0-5,"Jergosh",0x10a48,0x0,1,"Golpe",1
+10/20/2026 18:25:56.299-3  ZONE_CHANGE,1,"Orgrimmar",0
+10/20/2026 18:26:00.000-3  ZONE_CHANGE,489,"Warsong Gulch",0
+10/20/2026 18:26:01.000-3  SPELL_DAMAGE,Player-1-A,"Yo",0x511,0x0,Player-2-B,"Alianza",0x548,0x0,1,"Golpe",1
+`
+	ch := Filter([]byte(log), false, "", raid)
+	got := string(ch.Data)
+	for _, want := range []string{"Taragaman", "Jergosh"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("falta %q (mazmorra)", want)
+		}
+	}
+	for _, bad := range []string{"Peón", "Alianza"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("no debería subir %q", bad)
+		}
+	}
+	if len(ch.Zones) != 1 || ch.Zones[0] != "Ragefire Chasm" {
+		t.Errorf("zonas: %v", ch.Zones)
 	}
 }

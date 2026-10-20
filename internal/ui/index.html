@@ -60,7 +60,7 @@
       <div>
         <h3>✅ En tu PC</h3>
         <ul>
-          <li>Instala y actualiza el addon <b>Rebirth Track</b> en <code>Interface\AddOns</code> de las versiones de WoW que elijas. Al entrar a una banda, el addon prende el registro de combate del juego.</li>
+          <li>Instala y actualiza el addon <b>Rebirth Track</b> en <code>Interface\AddOns</code> de las versiones de WoW que elijas. Al entrar a una banda o mazmorra, el addon prende el registro de combate del juego.</li>
           <li>Lee los registros de combate que <b>WoW mismo</b> escribe en <code>Logs\WoWCombatLog*.txt</code>.</li>
           <li>Guarda su configuración en <code id="cfgdir">%APPDATA%\RebirthTrack</code>.</li>
         </ul>
@@ -68,9 +68,9 @@
       <div>
         <h3>⬆️ Qué sube a rebirthknights.fun</h3>
         <ul>
-          <li>Solo los tramos del registro de combate <b>dentro de bandas</b>: daño, curas, buffs y debuffs, muertes, posiciones y nombres de los participantes, tal como los escribe el juego.</li>
+          <li>Solo los tramos del registro de combate <b>dentro de bandas y mazmorras</b>: daño, curas, buffs y debuffs, muertes, posiciones y nombres de los participantes, tal como los escribe el juego.</li>
           <li>En lotes cada 3 minutos, comprimidos, a tu nombre (tu cuenta de Discord en Rebirth Track).</li>
-          <li><b>Nunca</b>: mundo abierto, mazmorras, JcJ, chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún otro archivo de tu PC.</li>
+          <li><b>Nunca</b>: mundo abierto, JcJ, chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún otro archivo de tu PC.</li>
         </ul>
       </div>
     </div>
@@ -124,12 +124,12 @@
 
   <section id="importSec" hidden>
     <h2>Registros anteriores</h2>
-    <p class="dim small">Lo que WoW registró antes de que aceptaras no se sube solo. Elegí cuáles importar: se sube <b>solo lo de bandas</b>, igual que siempre.</p>
+    <p class="dim small">Lo que WoW registró antes de que aceptaras no se sube solo. Elegí cuáles importar: se sube <b>solo lo de bandas y mazmorras</b>, igual que siempre.</p>
     <div class="row"><button class="ghost" id="oldLoad">Buscar registros anteriores</button><span class="dim small" id="oldInfo"></span></div>
     <div id="oldBox" hidden style="margin-top:10px">
       <ul class="clean old" id="oldList"></ul>
       <div class="row" style="margin-top:10px">
-        <label class="small"><input type="checkbox" id="oldAll" /> Elegir todos los que tienen bandas</label>
+        <label class="small"><input type="checkbox" id="oldAll" /> Elegir todos los que tienen bandas o mazmorras</label>
         <span class="grow"></span>
         <button id="oldImport" disabled>Importar elegidos</button>
       </div>
@@ -212,7 +212,7 @@ $('saveRoot').onclick = async () => { $('rootErr').hidden = true; try { render(a
 $('flavors').onchange = (e) => { const f = e.target.dataset?.flavor; if (f) act(() => call('/api/settings', { flavor: f, enabled: e.target.checked }))() }
 // ── Registros anteriores ──
 const day = (d) => d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : '—'
-const STATUS = { empty: 'Sin bandas', partial: 'Ya se está subiendo lo nuevo de este archivo', queued: 'En cola…', importing: 'Importando', imported: 'Importado ✓' }
+const STATUS = { empty: 'Sin bandas ni mazmorras', partial: 'Ya se está subiendo lo nuevo de este archivo', queued: 'En cola…', importing: 'Importando', imported: 'Importado ✓' }
 let oldShown = false
 const picked = new Set()
 async function loadOld() {
@@ -222,16 +222,16 @@ async function loadOld() {
     oldShown = true
     $('oldBox').hidden = !list.length
     const withRaid = list.filter((o) => o.status === 'available')
-    $('oldInfo').textContent = list.length ? `${list.length} archivo(s) · ${withRaid.length} con bandas para importar` : 'No hay registros anteriores.'
+    $('oldInfo').textContent = list.length ? `${list.length} archivo(s) · ${withRaid.length} con bandas o mazmorras para importar` : 'No hay registros anteriores.'
     for (const k of [...picked]) if (!withRaid.some((o) => o.key === k)) picked.delete(k)
     $('oldList').innerHTML = list.map((o) => {
       const can = o.status === 'available'
-      const st = can ? `<span class="small">${kb(o.raidBytes)} de banda</span>` : `<span class="small ${o.status === 'imported' ? '' : 'dim'}">${STATUS[o.status] || ''}${o.status === 'importing' ? ' ' + Math.round(o.progress * 100) + '%' : ''}</span>`
+      const st = can ? `<span class="small">${kb(o.raidBytes)} para subir</span>` : `<span class="small ${o.status === 'imported' ? '' : 'dim'}">${STATUS[o.status] || ''}${o.status === 'importing' ? ' ' + Math.round(o.progress * 100) + '%' : ''}</span>`
       return `<li class="${can || o.status !== 'empty' ? '' : 'off'}">
         <input type="checkbox" data-key="${esc(o.key)}" ${can ? '' : 'disabled'} ${picked.has(o.key) ? 'checked' : ''} />
         <span><b>${esc(o.install)}</b> · ${day(o.firstLineAt || o.modifiedAt)} <span class="dim small">→ ${day(o.modifiedAt)} · ${kb(o.size)} · ${esc(o.name)}</span></span>
         ${st}
-        <span class="zones dim">${o.zones.length ? esc(o.zones.join(' · ')) : 'Ninguna banda en este archivo'}</span>
+        <span class="zones dim">${o.zones.length ? esc(o.zones.join(' · ')) : 'Ni bandas ni mazmorras en este archivo'}</span>
         ${o.status === 'importing' ? `<div class="bar"><span style="width:${Math.round(o.progress * 100)}%"></span></div>` : ''}
       </li>`
     }).join('')

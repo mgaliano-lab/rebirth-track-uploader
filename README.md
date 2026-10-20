@@ -3,7 +3,7 @@
 App de Windows de la guild **Rebirth Knights**. Hace dos cosas:
 
 - instala y actualiza el addon **Rebirth Track**;
-- sube a [rebirthknights.fun](https://rebirthknights.fun) los **tramos de bandas** de los
+- sube a [rebirthknights.fun](https://rebirthknights.fun) los **tramos de bandas y mazmorras** de los
   registros de combate que escribe World of Warcraft.
 
 Corre en la bandeja del sistema. El panel se abre en el navegador, en
@@ -13,7 +13,7 @@ Corre en la bandeja del sistema. El panel se abre en el navegador, en
 
 | En la PC | Se sube | No se sube nunca |
 |---|---|---|
-| Instala el addon en `Interface\AddOns` de las versiones elegidas. | Solo las líneas del log entre un `ZONE_CHANGE` a una instancia con dificultad de banda y la salida (filtrado en la PC: [`internal/logs`](internal/logs/logs.go)). | Mundo abierto, mazmorras, JcJ. |
+| Instala el addon en `Interface\AddOns` de las versiones elegidas. | Solo las líneas del log entre un `ZONE_CHANGE` a una banda o mazmorra (por dificultad o, si el juego manda 0, por id de mapa) y la salida (filtrado en la PC: [`internal/logs`](internal/logs/logs.go)). | Mundo abierto, JcJ. |
 | Lee `Logs\WoWCombatLog*.txt`. | Lotes gzip cada 3 min por HTTPS, a nombre de la cuenta vinculada. | Chat, credenciales de Battle.net, capturas, teclas, otros archivos. |
 | Guarda su configuración en `%APPDATA%\RebirthTrack`. | | |
 
@@ -35,7 +35,7 @@ El texto que muestra el instalador está en [installer/que-hace.txt](installer/q
 |---|---|
 | `cmd/rebirthtrack` | `main`: bandeja (`fyne.io/systray`), instancia única y panel. |
 | `internal/app` | Ciclo de subida, vinculación, ajustes, inicio con Windows. |
-| `internal/logs` | Lectura incremental y filtro de bandas (con tests). |
+| `internal/logs` | Lectura incremental y filtro de bandas y mazmorras (con tests). |
 | `internal/addon` | Descarga de `latest.json` del CDN, verificación SHA-256 e instalación. |
 | `internal/wow` | Detecta la carpeta de WoW (registro de Windows y rutas comunes) y sus versiones. |
 | `internal/api` | Cliente de `/api/uploader/*` del sitio. |

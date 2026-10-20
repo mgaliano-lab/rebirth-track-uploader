@@ -1,7 +1,7 @@
 // Package logs lee los registros de combate que escribe WoW (Logs/WoWCombatLog*.txt) desde donde
-// quedó la última vez y se queda SOLO con los tramos de bandas: lo que el juego registró entre un
-// ZONE_CHANGE a una instancia con dificultad de banda y el siguiente ZONE_CHANGE a otro lado.
-// Todo lo demás (mundo abierto, mazmorras, JcJ) se descarta en la PC y nunca se sube.
+// quedó la última vez y se queda SOLO con los tramos de bandas y mazmorras: lo que el juego registró
+// entre un ZONE_CHANGE a una instancia y el siguiente ZONE_CHANGE a otro lado.
+// Todo lo demás (mundo abierto, JcJ) se descarta en la PC y nunca se sube.
 package logs
 
 import (
@@ -16,6 +16,21 @@ import (
 	"strings"
 	"time"
 )
+
+// Instances dice qué ZONE_CHANGE son de una banda o mazmorra (las listas las manda el sitio).
+// Classic a veces informa dificultad 0 al entrar a una mazmorra: ahí decide el id de mapa.
+// Mundo abierto y JcJ quedan afuera.
+type Instances struct {
+	Difficulties map[int]bool
+	Maps         map[int]bool
+}
+
+func (in Instances) Has(mapID, difficulty int) bool {
+	if difficulty != 0 {
+		return in.Difficulties[difficulty]
+	}
+	return in.Maps[mapID]
+}
 
 // Chunk son las líneas nuevas de un archivo listas para subir.
 type Chunk struct {
@@ -64,7 +79,7 @@ func List(dir string) ([]File, error) {
 const MaxChunk = 24 << 20
 
 // Read lee desde offset hasta la última línea completa (como mucho MaxChunk bytes) y filtra.
-func Read(path string, offset int64, inRaid bool, zone string, raidDifficulties map[int]bool) (Chunk, error) {
+func Read(path string, offset int64, inRaid bool, zone string, inst Instances) (Chunk, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Chunk{}, err
@@ -85,7 +100,7 @@ func Read(path string, offset int64, inRaid bool, zone string, raidDifficulties 
 		return Chunk{OffsetStart: offset, OffsetEnd: offset, InRaid: inRaid, Zone: zone}, nil
 	}
 	buf = buf[:last+1]
-	ch := Filter(buf, inRaid, zone, raidDifficulties)
+	ch := Filter(buf, inRaid, zone, inst)
 	ch.OffsetStart = offset
 	ch.OffsetEnd = offset + int64(len(buf))
 	return ch, nil
@@ -93,7 +108,7 @@ func Read(path string, offset int64, inRaid bool, zone string, raidDifficulties 
 
 // ReadRange relee exactamente [offset, end) (límite de línea ya confirmado por el sitio) para
 // recuperar el estado de zona en ese punto.
-func ReadRange(path string, offset, end int64, inRaid bool, zone string, raidDifficulties map[int]bool) (Chunk, error) {
+func ReadRange(path string, offset, end int64, inRaid bool, zone string, inst Instances) (Chunk, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Chunk{}, err
@@ -103,13 +118,13 @@ func ReadRange(path string, offset, end int64, inRaid bool, zone string, raidDif
 	if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
 		return Chunk{}, err
 	}
-	ch := Filter(buf, inRaid, zone, raidDifficulties)
+	ch := Filter(buf, inRaid, zone, inst)
 	ch.OffsetStart, ch.OffsetEnd = offset, end
 	return ch, nil
 }
 
 // Filter recorre las líneas y conserva las de bandas (más el encabezado COMBAT_LOG_VERSION).
-func Filter(buf []byte, inRaid bool, zone string, raidDifficulties map[int]bool) Chunk {
+func Filter(buf []byte, inRaid bool, zone string, inst Instances) Chunk {
 	var out bytes.Buffer
 	ch := Chunk{}
 	seen := map[string]bool{}
@@ -126,8 +141,8 @@ func Filter(buf []byte, inRaid bool, zone string, raidDifficulties map[int]bool)
 			ch.Header = append([]byte(nil), line...)
 			continue
 		case "ZONE_CHANGE":
-			name, diff := zoneChange(line)
-			inRaid = raidDifficulties[diff]
+			id, name, diff := zoneChange(line)
+			inRaid = inst.Has(id, diff)
 			zone = ""
 			if inRaid {
 				zone = name
@@ -168,13 +183,16 @@ func event(line []byte) string {
 	return string(rest[:j])
 }
 
-func zoneChange(line []byte) (name string, difficulty int) {
+func zoneChange(line []byte) (mapID int, name string, difficulty int) {
 	s := strings.TrimRight(string(line), "\r\n")
 	i := strings.Index(s, "ZONE_CHANGE,")
 	if i < 0 {
-		return "", 0
+		return 0, "", 0
 	}
 	s = s[i+len("ZONE_CHANGE,"):]
+	if c := strings.IndexByte(s, ','); c > 0 {
+		mapID, _ = strconv.Atoi(s[:c])
+	}
 	// id,"Nombre, con comas",dificultad
 	q1 := strings.IndexByte(s, '"')
 	q2 := strings.LastIndexByte(s, '"')
@@ -184,7 +202,7 @@ func zoneChange(line []byte) (name string, difficulty int) {
 	if k := strings.LastIndexByte(s, ','); k >= 0 {
 		difficulty, _ = strconv.Atoi(strings.TrimSpace(s[k+1:]))
 	}
-	return name, difficulty
+	return mapID, name, difficulty
 }
 
 // FirstTimestamp lee la fecha de la primera línea ("M/D/YYYY HH:MM:SS.mmm"), si se puede.
@@ -218,7 +236,7 @@ type Summary struct {
 }
 
 // Scan recorre el archivo hasta end con el mismo criterio que Filter, sin guardar las líneas.
-func Scan(path string, end int64, raidDifficulties map[int]bool) (Summary, error) {
+func Scan(path string, end int64, inst Instances) (Summary, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Summary{}, err
@@ -238,8 +256,8 @@ func Scan(path string, end int64, raidDifficulties map[int]bool) (Summary, error
 		}
 		if len(line) > 0 && line[len(line)-1] == '\n' {
 			if event(line) == "ZONE_CHANGE" {
-				name, diff := zoneChange(line)
-				inRaid = raidDifficulties[diff]
+				id, name, diff := zoneChange(line)
+				inRaid = inst.Has(id, diff)
 				if inRaid && !seen[name] {
 					seen[name] = true
 					sum.Zones = append(sum.Zones, name)

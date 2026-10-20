@@ -54,7 +54,7 @@ func (a *App) OldLogs() ([]OldLog, error) {
 	if s.ConsentAt == nil {
 		return nil, fmt.Errorf("primero aceptá lo que hace la app")
 	}
-	raid := a.raidSet()
+	raid := a.instanceSet()
 	_, installs := a.Installs()
 	out := []OldLog{}
 	for _, in := range installs {
@@ -110,7 +110,7 @@ func (a *App) OldLogs() ([]OldLog, error) {
 }
 
 // scan cachea el resumen por archivo mientras no cambie (los logs viejos pueden pesar cientos de MB).
-func (a *App) scan(key string, f logs.File, end int64, raid map[int]bool) (scanCache, error) {
+func (a *App) scan(key string, f logs.File, end int64, raid logs.Instances) (scanCache, error) {
 	a.mu.Lock()
 	sc, ok := a.scans[key]
 	a.mu.Unlock()

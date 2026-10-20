@@ -1,14 +1,14 @@
 ﻿REBIRTH TRACK UPLOADER — QUÉ HACE ESTA APP
 
 Rebirth Track Uploader es la app de la guild Rebirth Knights para registrar las bandas
-(raids) de World of Warcraft en https://rebirthknights.fun. Es gratuita y no tiene publicidad.
+(raids) y mazmorras de World of Warcraft en https://rebirthknights.fun. Es gratuita y no tiene publicidad.
 
 EN TU PC
 • Se instala solo para tu usuario de Windows (no pide permisos de administrador), en:
   %LOCALAPPDATA%\Programs\RebirthTrack
 • Instala y mantiene actualizado el addon "Rebirth Track" en la carpeta
-  Interface\AddOns de las versiones de WoW que elijas. El addon, al entrar a una banda,
-  prende el registro de combate del propio juego (/combatlog).
+  Interface\AddOns de las versiones de WoW que elijas. El addon, al entrar a una banda o
+  mazmorra, prende el registro de combate del propio juego (/combatlog).
 • Lee los registros de combate que World of Warcraft escribe en
   World of Warcraft\<versión>\Logs\WoWCombatLog*.txt
 • Guarda su configuración en %APPDATA%\RebirthTrack
@@ -16,14 +16,14 @@ EN TU PC
   (http://127.0.0.1:47812, accesible solo desde tu PC).
 
 QUÉ SUBE A REBIRTHKNIGHTS.FUN
-• Solo los tramos del registro de combate que ocurren DENTRO DE BANDAS: daño, curas,
+• Solo los tramos del registro de combate que ocurren DENTRO DE BANDAS Y MAZMORRAS: daño, curas,
   buffs y debuffs, muertes, posiciones y nombres de los personajes participantes,
   tal como los escribe el juego.
 • En lotes cada 3 minutos, comprimidos y por conexión segura (HTTPS), a nombre de tu
   cuenta de Rebirth Track (Discord), recién después de que vincules esta PC.
 
 QUÉ NO SUBE NUNCA
-• Registros de mundo abierto, mazmorras ni JcJ (se descartan en tu PC).
+• Registros de mundo abierto ni JcJ (se descartan en tu PC).
 • Chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún
   otro archivo de tu PC.
 

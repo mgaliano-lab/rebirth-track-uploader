@@ -19,8 +19,17 @@ import (
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/wow"
 )
 
-// Dificultades de banda por defecto (el sitio puede mandar otra lista en /api/uploader/config).
-var defaultRaid = []int{3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 33, 148, 151, 175, 176, 185, 186, 193, 194, 215}
+// Qué se sube por defecto: bandas y mazmorras (el sitio manda las listas vigentes en
+// /api/uploader/config; ver shared/instances.ts del sitio).
+var (
+	defaultRaid    = []int{3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 33, 148, 151, 175, 176, 185, 186, 193, 194, 215}
+	defaultDungeon = []int{1, 2, 8, 23, 24, 150, 173, 174, 201, 205}
+	defaultMaps    = []int{
+		249, 309, 409, 469, 509, 531, 533, 532, 534, 544, 548, 550, 564, 565, 568, 580, // bandas Classic/TBC
+		33, 34, 36, 43, 47, 48, 70, 90, 109, 129, 189, 209, 229, 230, 289, 329, 349, 389, 429, // mazmorras Classic
+		269, 540, 542, 543, 545, 546, 547, 552, 553, 554, 555, 556, 557, 558, 560, 585, // mazmorras TBC
+	}
+)
 
 const defaultAddonURL = "https://ast.rebirthknights.fun/addon/latest.json"
 
@@ -82,18 +91,27 @@ func (a *App) batchEvery() time.Duration {
 	return 3 * time.Minute
 }
 
-func (a *App) raidSet() map[int]bool {
+func (a *App) instanceSet() logs.Instances {
 	a.mu.Lock()
-	list := defaultRaid
+	raid, dungeon, maps := defaultRaid, defaultDungeon, defaultMaps
 	if a.cfg != nil && len(a.cfg.RaidDifficulties) > 0 {
-		list = a.cfg.RaidDifficulties
+		raid = a.cfg.RaidDifficulties
+	}
+	if a.cfg != nil && len(a.cfg.DungeonDifficulties) > 0 {
+		dungeon = a.cfg.DungeonDifficulties
+	}
+	if a.cfg != nil && len(a.cfg.InstanceMaps) > 0 {
+		maps = a.cfg.InstanceMaps
 	}
 	a.mu.Unlock()
-	m := map[int]bool{}
-	for _, d := range list {
-		m[d] = true
+	in := logs.Instances{Difficulties: map[int]bool{}, Maps: map[int]bool{}}
+	for _, d := range append(append([]int{}, raid...), dungeon...) {
+		in.Difficulties[d] = true
 	}
-	return m
+	for _, m := range maps {
+		in.Maps[m] = true
+	}
+	return in
 }
 
 // Run es el bucle principal: sube cada batchEvery y revisa el addon y la app cada 6 horas.
@@ -185,7 +203,7 @@ func (a *App) Cycle() {
 	if a.cfg == nil {
 		a.refreshConfig()
 	}
-	raid := a.raidSet()
+	raid := a.instanceSet()
 	_, installs := a.Installs()
 	for _, in := range installs {
 		if s.Disabled[in.Flavor] {
@@ -207,7 +225,7 @@ func (a *App) Cycle() {
 	}
 }
 
-func (a *App) processFile(in wow.Install, f logs.File, consentAt time.Time, raid map[int]bool) error {
+func (a *App) processFile(in wow.Install, f logs.File, consentAt time.Time, raid logs.Instances) error {
 	key := in.Flavor + "/" + f.Name
 	p := a.Store.File(key)
 	isNew := p.Offset == 0 && p.Seq == 0 && p.SessionID == 0
