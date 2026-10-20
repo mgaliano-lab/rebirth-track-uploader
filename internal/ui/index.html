@@ -8,6 +8,7 @@
 <style>
   :root { --bg:#0d0705; --panel:#1a0d08; --border:#5a2a18; --gold:#e3a42c; --text:#efe3c8; --dim:#a8977a; --ok:#3fbf3f; --bad:#ff5a4a; --warn:#f0b232; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; } /* si no, .row (display:flex) le gana a hidden */
   body { margin:0; background:radial-gradient(ellipse at top,#2a0f08,var(--bg) 60%); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
   main { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; display:flex; flex-direction:column; gap:16px; }
   header { display:flex; align-items:center; gap:14px; }
