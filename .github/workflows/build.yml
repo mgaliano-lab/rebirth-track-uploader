@@ -13,9 +13,16 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    # Repo público + runners propios: nunca correr código de PRs de forks en el cluster.
+    if: >-
+      ${{ !startsWith(github.ref, 'refs/tags/v') &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: talos-lab-mgaliano-lab
     steps:
       - uses: actions/checkout@v4
