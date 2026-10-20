@@ -27,9 +27,13 @@ const FilterVersion = 2
 type Instances struct {
 	Difficulties map[int]bool
 	Maps         map[int]bool
+	OpenWorld    map[int]bool // continentes: nunca son instancia (retail deja la dificultad pegada)
 }
 
 func (in Instances) Has(mapID, difficulty int) bool {
+	if in.OpenWorld[mapID] {
+		return false
+	}
 	if difficulty != 0 {
 		return in.Difficulties[difficulty]
 	}

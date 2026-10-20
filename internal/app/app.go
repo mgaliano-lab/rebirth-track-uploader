@@ -22,9 +22,10 @@ import (
 // Qué se sube por defecto: bandas y mazmorras (el sitio manda las listas vigentes en
 // /api/uploader/config; ver shared/instances.ts del sitio).
 var (
-	defaultRaid    = []int{3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 33, 148, 151, 175, 176, 185, 186, 193, 194, 215}
-	defaultDungeon = []int{1, 2, 8, 23, 24, 150, 173, 174, 201, 205}
-	defaultMaps    = []int{
+	defaultRaid      = []int{3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 33, 148, 151, 175, 176, 185, 186, 193, 194, 215}
+	defaultDungeon   = []int{1, 2, 8, 23, 24, 150, 173, 174, 201, 205}
+	defaultOpenWorld = []int{0, 1, 530, 571, 646, 730, 860, 870, 1064, 1116, 1191, 1220, 1642, 1643, 1718, 2222, 2444, 2552, 2601}
+	defaultMaps      = []int{
 		249, 309, 409, 469, 509, 531, 533, 532, 534, 544, 548, 550, 564, 565, 568, 580, // bandas Classic/TBC
 		33, 34, 36, 43, 47, 48, 70, 90, 109, 129, 189, 209, 229, 230, 289, 329, 349, 389, 429, // mazmorras Classic
 		269, 540, 542, 543, 545, 546, 547, 552, 553, 554, 555, 556, 557, 558, 560, 585, // mazmorras TBC
@@ -102,7 +103,7 @@ func (a *App) batchEvery() time.Duration {
 
 func (a *App) instanceSet() logs.Instances {
 	a.mu.Lock()
-	raid, dungeon, maps := defaultRaid, defaultDungeon, defaultMaps
+	raid, dungeon, maps, open := defaultRaid, defaultDungeon, defaultMaps, defaultOpenWorld
 	if a.cfg != nil && len(a.cfg.RaidDifficulties) > 0 {
 		raid = a.cfg.RaidDifficulties
 	}
@@ -112,8 +113,14 @@ func (a *App) instanceSet() logs.Instances {
 	if a.cfg != nil && len(a.cfg.InstanceMaps) > 0 {
 		maps = a.cfg.InstanceMaps
 	}
+	if a.cfg != nil && len(a.cfg.OpenWorldMaps) > 0 {
+		open = a.cfg.OpenWorldMaps
+	}
 	a.mu.Unlock()
-	in := logs.Instances{Difficulties: map[int]bool{}, Maps: map[int]bool{}}
+	in := logs.Instances{Difficulties: map[int]bool{}, Maps: map[int]bool{}, OpenWorld: map[int]bool{}}
+	for _, m := range open {
+		in.OpenWorld[m] = true
+	}
 	for _, d := range append(append([]int{}, raid...), dungeon...) {
 		in.Difficulties[d] = true
 	}

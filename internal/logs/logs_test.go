@@ -7,7 +7,17 @@ import (
 	"testing"
 )
 
-var raid = Instances{Difficulties: map[int]bool{3: true, 4: true, 14: true, 15: true, 16: true, 1: true}, Maps: map[int]bool{389: true}}
+var raid = Instances{Difficulties: map[int]bool{3: true, 4: true, 14: true, 15: true, 16: true, 1: true, 8: true}, Maps: map[int]bool{389: true}, OpenWorld: map[int]bool{0: true, 1: true}}
+
+func TestStickyDifficultyInCity(t *testing.T) {
+	// Retail: al salir de una M+ a la ciudad, ZONE_CHANGE trae el continente con dificultad 8.
+	log := `10/18/2026 00:46:43.716-3  ZONE_CHANGE,0,"Ciudad de Lunargenta",8
+10/18/2026 00:46:44.000-3  SPELL_DAMAGE,Player-1-A,"Yo",0x511,0x0,Creature-0-3,"Muñeco",0x10a48,0x0,1,"Golpe",1
+`
+	if ch := Filter([]byte(log), false, "", raid); len(ch.Data) != 0 {
+		t.Errorf("no debería subir la ciudad: %q", ch.Data)
+	}
+}
 
 const sample = `10/24/2026 20:55:00.000-3  COMBAT_LOG_VERSION,20,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,2.5.5,PROJECT_ID,5
 10/24/2026 20:55:01.000-3  ZONE_CHANGE,530,"Península del Fuego Infernal",0

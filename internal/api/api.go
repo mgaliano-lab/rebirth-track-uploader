@@ -115,6 +115,7 @@ type Config struct {
 	RaidDifficulties    []int  `json:"raidDifficulties"`
 	DungeonDifficulties []int  `json:"dungeonDifficulties"`
 	InstanceMaps        []int  `json:"instanceMaps"`
+	OpenWorldMaps       []int  `json:"openWorldMaps"`
 	AddonLatestURL      string `json:"addonLatestUrl"`
 	SiteURL             string `json:"siteUrl"`
 }
