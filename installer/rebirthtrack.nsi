@@ -20,7 +20,11 @@ SetCompressor /SOLID lzma
 !define PUBLISHER "Rebirth Knights"
 !define REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\RebirthTrackUploader"
 
-!searchparse /noerrors "${VERSION}" "" VMAJ "." VMIN "." VPAT
+; Versión numérica para los metadatos del .exe (sin sufijos tipo -dev.abc1234).
+!ifndef NUMVER
+  !define NUMVER "${VERSION}"
+!endif
+!searchparse /noerrors "${NUMVER}" "" VMAJ "." VMIN "." VPAT
 !ifndef VMAJ
   !define VMAJ 0
 !endif

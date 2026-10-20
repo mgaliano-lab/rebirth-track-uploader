@@ -37,7 +37,7 @@ RUN --mount=type=secret,id=sign,required=false \
     export REQUIRE_SIGNING=${REQUIRE_SIGNING} \
  && sign dist/RebirthTrackUploader.exe \
  && mkdir -p /out && cd installer \
- && makensis -V2 -DVERSION="${VERSION}" -DSRC=../dist -DOUT="/out/RebirthTrackUploader-Setup-${VERSION}.exe" -DSIGN_CMD=/usr/local/bin/sign rebirthtrack.nsi \
+ && makensis -V2 -DVERSION="${VERSION}" -DNUMVER="${VERSION%%-*}" -DSRC=../dist -DOUT="/out/RebirthTrackUploader-Setup-${VERSION}.exe" -DSIGN_CMD=/usr/local/bin/sign rebirthtrack.nsi \
  && cp ../dist/RebirthTrackUploader.exe "/out/RebirthTrackUploader-${VERSION}.exe" \
  && cd /out && sha256sum *.exe > SHA256SUMS.txt
 
