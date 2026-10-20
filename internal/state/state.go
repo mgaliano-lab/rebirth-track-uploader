@@ -24,7 +24,8 @@ type FileProgress struct {
 
 type State struct {
 	ConsentAt  *time.Time               `json:"consentAt,omitempty"`
-	Token      string                   `json:"token,omitempty"`
+	Token      string                   `json:"-"`               // en memoria, en claro
+	TokenEnc   string                   `json:"token,omitempty"` // en disco: cifrado (DPAPI en Windows)
 	UserName   string                   `json:"userName,omitempty"`
 	DeviceName string                   `json:"deviceName,omitempty"`
 	Paused     bool                     `json:"paused"`
@@ -61,6 +62,13 @@ func Open(dir string) (*Store, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
+	if st.s.TokenEnc != "" {
+		tok, err := unprotect(st.s.TokenEnc)
+		if err != nil {
+			st.s.TokenEnc = "" // no se puede descifrar (otra PC/usuario): hay que volver a vincular
+		}
+		st.s.Token = tok
+	}
 	if st.s.Files == nil {
 		st.s.Files = map[string]*FileProgress{}
 	}
@@ -82,6 +90,11 @@ func (st *Store) Update(fn func(s *State)) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	fn(&st.s)
+	enc, err := protect(st.s.Token)
+	if err != nil {
+		return err
+	}
+	st.s.TokenEnc = enc
 	b, err := json.MarshalIndent(st.s, "", "  ")
 	if err != nil {
 		return err

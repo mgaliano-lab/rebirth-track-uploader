@@ -439,6 +439,7 @@ type Status struct {
 	Batches   int             `json:"batches"`
 	Activity  []Activity      `json:"activity"`
 	Autostart bool            `json:"autostart"`
+	Packaged  bool            `json:"packaged"`
 }
 
 func (a *App) Status() Status {
@@ -447,7 +448,7 @@ func (a *App) Status() Status {
 	st := Status{
 		Version: a.Version, SiteURL: a.BaseURL, Consent: s.ConsentAt != nil, Linked: s.Token != "",
 		UserName: s.UserName, Device: s.DeviceName, Paused: s.Paused, AddonAuto: s.AddonAuto, WowRoot: root,
-		Autostart: AutostartEnabled(),
+		Autostart: AutostartEnabled(), Packaged: Packaged(),
 	}
 	if s.WowRoot != "" {
 		st.WowRoot = s.WowRoot

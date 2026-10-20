@@ -1,8 +1,8 @@
-# Build de Rebirth Track Uploader en runners de GitHub (gratis en repos públicos; x86 con Docker).
+# Build de Rebirth Track Uploader en runners de GitHub (gratis en repos públicos).
 # Los PRs de forks corren en máquinas descartables de GitHub y no ven los secrets.
-# - push/PR: compila, testea y arma el instalador SIN firmar (artefacto del job).
-# - tag vX.Y.Z: igual pero FIRMADO (environment "release", con aprobación), crea el GitHub
-#   Release y publica en el CDN (ast.rebirthknights.fun/uploader/) para la descarga desde la web.
+#  - build (Linux, Docker): tests + .exe + instalador NSIS.
+#  - msix (Windows): tests en Windows (incluye DPAPI) + paquete MSIX para la Microsoft Store.
+#  - release (tag vX.Y.Z, environment "release" con aprobación): GitHub Release con todo.
 name: build
 
 on:
@@ -20,64 +20,69 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build (sin firma)
+      - id: v
         run: |
-          VERSION="0.0.0-dev.${GITHUB_SHA::7}"
-          docker build --pull --build-arg VERSION="$VERSION" --target dist -o out .
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.${GITHUB_RUN_NUMBER}-dev.${GITHUB_SHA::7}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Build (.exe + instalador)
+        run: docker build --pull --build-arg VERSION="${{ steps.v.outputs.version }}" --target dist -o out .
       - uses: actions/upload-artifact@v4
         with:
-          name: rebirth-track-uploader-dev
+          name: windows-x64
           path: out/
+          retention-days: 14
+
+  msix:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Tests en Windows
+        run: go test ./...
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-x64
+          path: out
+      - name: Paquete MSIX
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+        shell: pwsh
+        run: |
+          $v = "${{ needs.build.outputs.version }}"
+          ./scripts/build-msix.ps1 -Exe "out/RebirthTrackUploader-$v.exe" -Version $v -Out msix-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msix
+          path: msix-out/
           retention-days: 14
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, msix]
     runs-on: ubuntu-latest
-    # Los secretos de firma viven solo en este environment (con revisor requerido).
     environment: release
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Build firmado
-        env:
-          SIGN_PROVIDER: ${{ secrets.SIGN_PROVIDER }}
-          JSIGN_STORETYPE: ${{ secrets.JSIGN_STORETYPE }}
-          JSIGN_KEYSTORE: ${{ secrets.JSIGN_KEYSTORE }}
-          JSIGN_STOREPASS: ${{ secrets.JSIGN_STOREPASS }}
-          JSIGN_ALIAS: ${{ secrets.JSIGN_ALIAS }}
-          SIGN_COMMAND: ${{ secrets.SIGN_COMMAND }}
-          REQUIRE_SIGNING: ${{ vars.REQUIRE_SIGNING || '0' }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          umask 077
-          {
-            echo "SIGN_PROVIDER=${SIGN_PROVIDER}"
-            echo "JSIGN_STORETYPE=${JSIGN_STORETYPE}"
-            printf 'JSIGN_KEYSTORE=%q\n' "${JSIGN_KEYSTORE}"
-            printf 'JSIGN_STOREPASS=%q\n' "${JSIGN_STOREPASS}"
-            printf 'JSIGN_ALIAS=%q\n' "${JSIGN_ALIAS}"
-            printf 'SIGN_COMMAND=%q\n' "${SIGN_COMMAND}"
-          } > "$RUNNER_TEMP/sign.env"
-          docker build --pull --build-arg VERSION="$VERSION" --build-arg REQUIRE_SIGNING="$REQUIRE_SIGNING" \
-            --secret id=sign,src="$RUNNER_TEMP/sign.env" --target dist -o out .
-          rm -f "$RUNNER_TEMP/sign.env"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" out/* --title "Rebirth Track Uploader $VERSION" \
-            --notes "Instalador para Windows (x64). Verificá el archivo con SHA256SUMS.txt."
-      - name: Publicar en el CDN
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.CDN_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.CDN_AWS_SECRET_ACCESS_KEY }}
-        run: |
-          if [ -z "$AWS_ACCESS_KEY_ID" ]; then echo "Sin credenciales del CDN: no se publica en la web"; exit 0; fi
-          docker run --rm -v "$PWD:/w" -w /w -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION=us-east-1 \
-            --entrypoint bash amazon/aws-cli:2.27.0 scripts/publish-cdn.sh "$VERSION"
+          (cd dist && sha256sum *.exe *.msix > SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Rebirth Track Uploader $VERSION" \
+            --notes "El MSIX es el que se publica en la Microsoft Store (firmado por Microsoft). El instalador .exe se incluye para revisión. Verificá los archivos con SHA256SUMS.txt."

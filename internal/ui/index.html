@@ -105,7 +105,8 @@
       <button class="ghost" id="now">Subir ahora</button>
       <button id="pause"></button>
     </div>
-    <div class="row small" style="margin-top:10px"><label><input type="checkbox" id="autostart" /> Iniciar con Windows (minimizada en la bandeja)</label></div>
+    <div class="row small" style="margin-top:10px" id="autostartRow"><label><input type="checkbox" id="autostart" /> Iniciar con Windows (minimizada en la bandeja)</label></div>
+    <p class="dim small" id="autostartStore" hidden>Inicio con Windows: activalo o desactivalo en Configuración › Aplicaciones › Inicio (Rebirth Track Uploader).</p>
   </section>
 
   <section>
@@ -150,6 +151,8 @@ function render(s) {
     </li>`).join('') : '<li class="dim">No encontré World of Warcraft. Indicá la carpeta arriba (la que contiene _retail_, _classic_era_, etc.).</li>'
   $('addonAuto').checked = s.addonAutoUpdate
   $('autostart').checked = s.autostart
+  $('autostartRow').hidden = s.packaged
+  $('autostartStore').hidden = !s.packaged
   $('pause').textContent = s.paused ? 'Reanudar' : 'Pausar'
   $('uploadInfo').innerHTML = s.linked
     ? `Último ciclo ${fmt(s.lastRun)} · próximo ${fmt(s.nextRun)} · subidos en esta sesión: <b>${kb(s.uploadedBytes)}</b> en ${s.batches} lote(s)`

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Paquete MSIX para la Microsoft Store. La Store lo firma al publicarlo.
+     Identity Name / Publisher / PublisherDisplayName salen de Partner Center (variables del repo
+     MSIX_IDENTITY_NAME, MSIX_PUBLISHER, MSIX_PUBLISHER_DISPLAY_NAME); scripts/build-msix.ps1 los reemplaza. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop rescap">
+
+  <Identity Name="__IDENTITY_NAME__" Publisher="__PUBLISHER__" Version="__VERSION__" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Rebirth Track Uploader</DisplayName>
+    <PublisherDisplayName>__PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Instala el addon Rebirth Track y sube a rebirthknights.fun los registros de combate de tus bandas de World of Warcraft.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="es-ES" />
+  </Resources>
+
+  <Applications>
+    <Application Id="RebirthTrackUploader" Executable="RebirthTrackUploader.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Rebirth Track Uploader"
+        Description="Sube los registros de combate de tus bandas de WoW a Rebirth Track."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- Inicio con Windows: el usuario lo apaga en Configuración › Aplicaciones › Inicio. -->
+        <desktop:Extension Category="windows.startupTask" Executable="RebirthTrackUploader.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="RebirthTrackUploaderStartup" Enabled="true" DisplayName="Rebirth Track Uploader" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <!-- App de escritorio (Win32): necesita leer los logs y escribir el addon en la carpeta de WoW. -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

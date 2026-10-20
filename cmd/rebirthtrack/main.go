@@ -72,7 +72,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { a.Run(ctx); close(done) }()
-	if !*minimized || st.Read().ConsentAt == nil {
+	if !(*minimized || app.StartedAtLogin()) || st.Read().ConsentAt == nil {
 		openURL(srv.URL())
 	}
 	quit := func() { cancel(); <-done }
