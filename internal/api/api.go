@@ -146,6 +146,16 @@ type BatchResult struct {
 	OffsetEnd int64 `json:"offsetEnd"`
 }
 
+// RestartSession borra en el sitio lo subido de un archivo para volver a subirlo entero (por
+// ejemplo, porque se leyó con un filtro anterior que no incluía mazmorras).
+func (c *Client) RestartSession(sessionID int) error {
+	code, err := c.do("POST", fmt.Sprintf("/api/uploader/sessions/%d/restart", sessionID), nil, nil, nil)
+	if code == http.StatusNotFound {
+		return nil // ya no existía
+	}
+	return err
+}
+
 // SendBatch comprime y sube un lote.
 func (c *Client) SendBatch(sessionID, seq int, offsetStart, offsetEnd int64, data []byte) (BatchResult, error) {
 	var gz bytes.Buffer

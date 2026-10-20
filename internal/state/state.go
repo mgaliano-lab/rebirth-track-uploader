@@ -22,6 +22,7 @@ type FileProgress struct {
 	Header    string `json:"header,omitempty"`   // línea COMBAT_LOG_VERSION, va al principio de la sesión
 	Skipped   bool   `json:"skipped,omitempty"`  // era anterior al consentimiento y no se subió (se puede importar)
 	Imported  bool   `json:"imported,omitempty"` // el usuario pidió importarlo desde el principio
+	Filter    int    `json:"filter,omitempty"`   // versión del filtro con que se leyó desde el principio (ver logs.FilterVersion)
 }
 
 type State struct {

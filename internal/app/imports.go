@@ -21,9 +21,11 @@ type OldLog struct {
 	Modified  time.Time  `json:"modifiedAt"`
 	Zones     []string   `json:"zones"`
 	RaidBytes int64      `json:"raidBytes"`
-	// available: se puede importar · empty: no tiene bandas · partial: ya se empezó a subir lo nuevo
-	// de este archivo, así que lo anterior no se puede intercalar · queued/importing/imported.
-	Status   string  `json:"status"`
+	// available: se puede importar · empty: no tiene bandas ni mazmorras · queued/importing/imported.
+	Status string `json:"status"`
+	// Por qué no se subió: before = es de antes de aceptar · filter = se leyó cuando la app solo
+	// subía bandas (se vuelve a subir entero, reemplazando lo que ya estaba en el sitio).
+	Reason   string  `json:"reason"`
 	Progress float64 `json:"progress"`
 }
 
@@ -34,19 +36,29 @@ type scanCache struct {
 	sum   logs.Summary
 }
 
-// importable dice si un archivo es un log viejo salteado (o que se va a saltear) y hasta dónde.
-func importable(p *state.FileProgress, f logs.File, consentAt time.Time) (end int64, ok bool) {
+// importable dice si un archivo se puede (re)importar, hasta dónde y por qué.
+func importable(p *state.FileProgress, f logs.File, consentAt time.Time) (end int64, reason string, ok bool) {
 	if p == nil { // todavía no lo vio ningún ciclo
-		return f.Size, f.ModTime.Before(consentAt)
+		return f.Size, "before", f.ModTime.Before(consentAt)
 	}
 	if p.Imported {
-		return f.Size, true
+		return f.Size, "", true
+	}
+	// Leído (en parte) con un filtro anterior: se vuelve a subir entero.
+	if p.Offset > 0 && p.Filter < logs.FilterVersion && !p.Skipped {
+		if !p.Skipped && p.SessionID == 0 && p.Seq == 0 && f.ModTime.Before(consentAt) {
+			return min(p.Offset, f.Size), "before", true // salteado por ser de antes de aceptar (estado viejo)
+		}
+		return f.Size, "filter", true
 	}
 	// Los anteriores a la marca Skipped: sin sesión, leídos hasta algún lado y sin tocar desde antes de aceptar.
-	if p.Skipped || (p.SessionID == 0 && p.Seq == 0 && p.Offset > 0 && f.ModTime.Before(consentAt)) {
-		return min(p.Offset, f.Size), true
+	if p.Skipped && p.SessionID == 0 {
+		return min(p.Offset, f.Size), "before", true
 	}
-	return 0, false
+	if p.Skipped { // el que se estaba escribiendo al aceptar: se re-sube entero
+		return f.Size, "before", true
+	}
+	return 0, "", false
 }
 
 func (a *App) OldLogs() ([]OldLog, error) {
@@ -73,7 +85,7 @@ func (a *App) OldLogs() ([]OldLog, error) {
 				cp := *pp
 				p = &cp
 			}
-			end, ok := importable(p, f, *s.ConsentAt)
+			end, reason, ok := importable(p, f, *s.ConsentAt)
 			if !ok {
 				continue
 			}
@@ -81,7 +93,7 @@ func (a *App) OldLogs() ([]OldLog, error) {
 			if err != nil {
 				continue
 			}
-			o := OldLog{Key: key, Install: in.Label, Name: f.Name, Size: f.Size, First: sc.first, Modified: f.ModTime, Zones: sc.sum.Zones, RaidBytes: sc.sum.RaidBytes}
+			o := OldLog{Reason: reason, Key: key, Install: in.Label, Name: f.Name, Size: f.Size, First: sc.first, Modified: f.ModTime, Zones: sc.sum.Zones, RaidBytes: sc.sum.RaidBytes}
 			a.mu.Lock()
 			queued := a.imports[key]
 			a.mu.Unlock()
@@ -93,8 +105,6 @@ func (a *App) OldLogs() ([]OldLog, error) {
 				if f.Size > 0 && p.Offset < f.Size {
 					o.Status, o.Progress = "importing", float64(p.Offset)/float64(f.Size)
 				}
-			case p != nil && p.SessionID != 0:
-				o.Status = "partial"
 			case len(sc.sum.Zones) == 0:
 				o.Status = "empty"
 			default:
@@ -158,12 +168,13 @@ func (a *App) ImportLogs(keys []string) (int, error) {
 	if n == 0 {
 		return 0, fmt.Errorf("ninguno de los archivos elegidos se puede importar")
 	}
-	a.log("info", "Importando %d registro(s) anteriores: se sube solo lo de bandas.", n)
+	a.log("info", "Importando %d registro(s) anteriores: se sube solo lo de bandas y mazmorras.", n)
 	a.UploadNow()
 	return n, nil
 }
 
 // applyImports rebobina los archivos encolados (corre dentro del ciclo, sin otro ciclo en paralelo).
+// Si de ese archivo ya se había subido algo, primero se borra en el sitio para no duplicarlo.
 func (a *App) applyImports() {
 	a.mu.Lock()
 	keys := a.imports
@@ -172,13 +183,25 @@ func (a *App) applyImports() {
 	if len(keys) == 0 {
 		return
 	}
+	files := a.Store.Read().Files
+	c := a.client()
+	for k := range keys {
+		if p := files[k]; p != nil && p.SessionID != 0 {
+			if err := c.RestartSession(p.SessionID); err != nil {
+				a.log("error", "No pude reiniciar %s en el sitio: %v (se reintenta)", k, err)
+				a.mu.Lock()
+				if a.imports == nil {
+					a.imports = map[string]bool{}
+				}
+				a.imports[k] = true
+				a.mu.Unlock()
+				delete(keys, k)
+			}
+		}
+	}
 	a.Store.Update(func(s *state.State) {
 		for k := range keys {
-			p := s.Files[k]
-			if p != nil && p.SessionID != 0 {
-				continue // empezó a subirse lo nuevo mientras tanto
-			}
-			s.Files[k] = &state.FileProgress{Imported: true}
+			s.Files[k] = &state.FileProgress{Imported: true, Filter: logs.FilterVersion}
 		}
 	})
 }

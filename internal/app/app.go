@@ -248,6 +248,9 @@ func (a *App) processFile(in wow.Install, f logs.File, consentAt time.Time, raid
 	if f.Size < p.Offset { // el archivo se truncó o se reemplazó
 		p.Offset, p.InRaid, p.Zone = 0, false, ""
 	}
+	if p.Offset == 0 {
+		p.Filter = logs.FilterVersion // se lee entero con el filtro actual
+	}
 	c := a.client()
 	for i := 0; i < 20 && f.Size > p.Offset; i++ {
 		ch, err := logs.Read(f.Path, p.Offset, p.InRaid, p.Zone, raid)

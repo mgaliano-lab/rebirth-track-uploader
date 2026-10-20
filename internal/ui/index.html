@@ -142,7 +142,7 @@
 
   <section id="importSec" hidden>
     <h2>Registros anteriores</h2>
-    <p class="dim small">Lo que WoW registró antes de que aceptaras no se sube solo. Elegí cuáles importar: se sube <b>solo lo de bandas y mazmorras</b>, igual que siempre.</p>
+    <p class="dim small">Lo que WoW registró antes de que aceptaras (o lo que una versión anterior de la app leyó sin las mazmorras) no se sube solo. Elegí cuáles importar: se sube <b>solo lo de bandas y mazmorras</b>, igual que siempre.</p>
     <div class="row"><button class="ghost" id="oldLoad">Buscar registros anteriores</button><span class="dim small" id="oldInfo"></span></div>
     <div id="oldBox" hidden style="margin-top:10px">
       <ul class="clean old" id="oldList"></ul>
@@ -256,7 +256,7 @@ $('saveRoot').onclick = async () => { $('rootErr').hidden = true; try { render(a
 $('flavors').onchange = (e) => { const f = e.target.dataset?.flavor; if (f) act(() => call('/api/settings', { flavor: f, enabled: e.target.checked }))() }
 // ── Registros anteriores ──
 const day = (d) => d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : '—'
-const STATUS = { empty: 'Sin bandas ni mazmorras', partial: 'Ya se está subiendo lo nuevo de este archivo', queued: 'En cola…', importing: 'Importando', imported: 'Importado ✓' }
+const STATUS = { empty: 'Sin bandas ni mazmorras', queued: 'En cola…', importing: 'Importando', imported: 'Importado ✓' }
 let oldShown = false
 const picked = new Set()
 async function loadOld() {
@@ -275,7 +275,7 @@ async function loadOld() {
         <input type="checkbox" data-key="${esc(o.key)}" ${can ? '' : 'disabled'} ${picked.has(o.key) ? 'checked' : ''} />
         <span><b>${esc(o.install)}</b> · ${day(o.firstLineAt || o.modifiedAt)} <span class="dim small">→ ${day(o.modifiedAt)} · ${kb(o.size)} · ${esc(o.name)}</span></span>
         ${st}
-        <span class="zones dim">${o.zones.length ? esc(o.zones.join(' · ')) : 'Ni bandas ni mazmorras en este archivo'}</span>
+        <span class="zones dim">${o.zones.length ? esc(o.zones.join(' · ')) : 'Ni bandas ni mazmorras en este archivo'}${o.reason === 'filter' && o.status === 'available' ? ' · <i>se leyó cuando la app solo subía bandas: se vuelve a subir entero</i>' : ''}</span>
         ${o.status === 'importing' ? `<div class="bar"><span style="width:${Math.round(o.progress * 100)}%"></span></div>` : ''}
       </li>`
     }).join('')

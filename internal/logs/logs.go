@@ -17,6 +17,10 @@ import (
 	"time"
 )
 
+// FilterVersion sube cuando cambia QUÉ se sube (1 = solo bandas, 2 = bandas y mazmorras). Lo leído
+// con un filtro anterior se puede volver a subir desde "Registros anteriores".
+const FilterVersion = 2
+
 // Instances dice qué ZONE_CHANGE son de una banda o mazmorra (las listas las manda el sitio).
 // Classic a veces informa dificultad 0 al entrar a una mazmorra: ahí decide el id de mapa.
 // Mundo abierto y JcJ quedan afuera.
