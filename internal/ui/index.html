@@ -318,6 +318,7 @@ function render(s) {
   $('appUpdRow').hidden = u.mode === 'store'
   $('appUpdStore').hidden = u.mode !== 'store'
   $('appAuto').checked = !!u.auto
+  if (u.updating) { $('pill').textContent = 'Actualizando… se reconecta sola'; $('pill').className = 'pill warn' }
   $('appUpdInfo').textContent = u.updating ? 'Actualizando…' : u.available ? `Hay una versión nueva: v${u.latest}` : u.latest ? `Al día (última v${u.latest})` : ''
   $('appUpdNow').textContent = u.available ? `Actualizar a v${u.latest}` : 'Buscar actualización'
   $('appUpdNow').disabled = !!u.updating
@@ -327,7 +328,21 @@ function render(s) {
     : 'Vinculá la PC para empezar a subir.'
   $('activity').innerHTML = s.activity.length ? s.activity.slice(0, 60).map((a) => `<li><time>${fmt(a.at)}</time><span class="${esc(a.kind)}">${esc(a.text)}</span></li>`).join('') : '<li class="dim">Sin actividad todavía.</li>'
 }
-async function refresh() { try { render(await call('/api/status')) } catch (e) { $('pill').textContent = 'Sin conexión con la app'; $('pill').className = 'pill bad' } }
+// Si la app se reinicia (por ejemplo, al actualizarse sola) el panel se queda esperando y, cuando
+// vuelve con otra versión, se recarga para tomar la interfaz nueva.
+let loadedVersion = null
+async function refresh() {
+  try {
+    const s = await call('/api/status')
+    if (loadedVersion && s.version !== loadedVersion) { location.reload(); return }
+    loadedVersion = s.version
+    render(s)
+  } catch (e) {
+    const updating = last?.appUpdate?.updating
+    $('pill').textContent = updating ? 'Actualizando… se reconecta sola' : 'Sin conexión con la app (¿está cerrada?)'
+    $('pill').className = updating ? 'pill warn' : 'pill bad'
+  }
+}
 const act = (fn) => async () => { try { render(await fn()) } catch (e) { alert(e.message) } }
 $('consent').onclick = act(() => call('/api/consent', {}))
 $('link').onclick = async () => { try { await call('/api/link', {}); refresh() } catch (e) { alert('No se pudo iniciar la vinculación: ' + e.message) } }

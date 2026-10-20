@@ -52,13 +52,25 @@ func Listen(a *app.App, stateDir string) (*Server, error) {
 		}
 		return nil, fmt.Errorf("el puerto %d está ocupado por otro programa: %w", Port, err)
 	}
-	b := make([]byte, 16)
-	rand.Read(b)
-	s := &Server{App: a, Key: hex.EncodeToString(b), ln: ln}
-	if err := os.WriteFile(KeyFile(stateDir), []byte(s.Key), 0o600); err != nil {
-		return nil, err
+	// La clave se conserva entre reinicios (ej. al actualizarse sola): así el panel que estaba
+	// abierto se reconecta solo cuando vuelve la app. Es un archivo 0600 en la carpeta del usuario.
+	key := ""
+	if b, err := os.ReadFile(KeyFile(stateDir)); err == nil {
+		if k := strings.TrimSpace(string(b)); len(k) == 32 {
+			if _, err := hex.DecodeString(k); err == nil {
+				key = k
+			}
+		}
 	}
-	return s, nil
+	if key == "" {
+		b := make([]byte, 16)
+		rand.Read(b)
+		key = hex.EncodeToString(b)
+		if err := os.WriteFile(KeyFile(stateDir), []byte(key), 0o600); err != nil {
+			return nil, err
+		}
+	}
+	return &Server{App: a, Key: key, ln: ln}, nil
 }
 
 // RunningURL arma la URL del panel de la instancia que ya está corriendo.
