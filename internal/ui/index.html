@@ -62,6 +62,8 @@
   .tab { display:flex; flex-direction:column; gap:16px; }
   .tab[hidden] { display:none !important; }
   .hdr-right { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .setup { display:flex; gap:12px; align-items:center; padding:12px 16px; border:1px solid var(--gold); border-radius:8px; background:linear-gradient(90deg,#3a1a08,#1a0d08); }
+  .setup .step { flex:none; font:700 .78rem system-ui; color:#000; background:var(--gold); border-radius:999px; padding:3px 10px; white-space:nowrap; }
   .hint { font-size:.75rem; color:var(--dim); text-align:right; }
 </style>
 </head>
@@ -81,6 +83,10 @@
       </div>
     </div>
   </header>
+  <div class="setup" id="setup" hidden>
+    <span class="step" id="setupStep"></span>
+    <span id="setupText"></span>
+  </div>
   <nav class="tabs" id="tabs" hidden role="tablist">
     <button data-tab="home" role="tab">Inicio <span class="n">1</span></button>
     <button data-tab="wow" role="tab">World of Warcraft <span class="n">2</span></button>
@@ -227,6 +233,8 @@ const fmt = (d) => d ? new Date(d).toLocaleTimeString('es-AR', { hour: '2-digit'
 const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB'
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
 // ── Pestañas ──
+let wasStep = null
+let autoLocated = false
 let tab = (() => { try { return localStorage.getItem('rt-tab') || 'home' } catch { return 'home' } })()
 let last = null
 function showTab(t) {
@@ -248,13 +256,28 @@ function render(s) {
   else if (s.paused) { pill.textContent = 'En pausa'; pill.className = 'pill warn' }
   else { pill.textContent = 'Activa'; pill.className = 'pill ok' }
   $('consentRow').hidden = s.consent
-  const first = !last
   last = s
-  // Sin aceptar: solo "Qué hace". Sin vincular: la pestaña de cuenta.
-  $('tabs').hidden = !s.consent
-  $('tools').hidden = !s.consent || !s.linked
-  if (!s.consent) { for (const p of document.querySelectorAll('.tab')) p.hidden = p.dataset.pane !== 'what' }
-  else if (first) showTab(s.linked ? tab : 'cfg')
+  // Primera vez, por pasos: 1) aceptar · 2) carpeta de WoW con al menos una versión · 3) vincular.
+  // Hasta completar un paso no se puede hacer otra cosa.
+  const hasWow = (s.installs || []).some((i) => i.enabled)
+  const step = !s.consent ? 1 : !hasWow ? 2 : !s.linked ? 3 : 0
+  const only = { 1: 'what', 2: 'wow', 3: 'cfg' }[step]
+  $('setup').hidden = !step
+  $('setupStep').textContent = step ? `Paso ${step} de 3` : ''
+  $('setupText').innerHTML = step === 1
+    ? 'Leé qué hace la app y aceptá para empezar.'
+    : step === 2
+      ? ((s.installs || []).length
+        ? 'Activá al menos una versión de WoW para continuar.'
+        : 'Elegí la carpeta <b>World of Warcraft</b> (la que tiene <code>_retail_</code>, <code>_anniversary_</code>…) o tocá <b>Autoubicar</b>.')
+      : step === 3 ? 'Vinculá esta PC con tu cuenta de Rebirth Track (Discord).' : ''
+  $('tabs').hidden = !!step
+  $('tools').hidden = !!step
+  if (step) { for (const p of document.querySelectorAll('.tab')) p.hidden = p.dataset.pane !== only }
+  else if (wasStep !== 0) showTab(wasStep ? 'home' : tab)
+  // Paso 2: la primera vez intenta ubicar WoW solo.
+  if (step === 2 && !autoLocated && !(s.installs || []).length) { autoLocated = true; $('locateRoot').click() }
+  wasStep = step
   $('tPause').textContent = s.paused ? '▶️' : '⏸️'
   $('tPause').dataset.tip = s.paused ? 'Reanudar subida · P' : 'Pausar subida · P'
   $('tPause').classList.toggle('on', s.paused)
