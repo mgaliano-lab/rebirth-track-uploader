@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rebirth Track Uploader</title>
+<link rel="icon" href="/icon.png" />
+<style>
+  :root { --bg:#0d0705; --panel:#1a0d08; --border:#5a2a18; --gold:#e3a42c; --text:#efe3c8; --dim:#a8977a; --ok:#3fbf3f; --bad:#ff5a4a; --warn:#f0b232; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:radial-gradient(ellipse at top,#2a0f08,var(--bg) 60%); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; display:flex; flex-direction:column; gap:16px; }
+  header { display:flex; align-items:center; gap:14px; }
+  header img { width:52px; height:52px; }
+  h1 { margin:0; font-size:1.4rem; color:var(--gold); letter-spacing:.02em; }
+  h2 { margin:0 0 10px; font-size:1.05rem; color:var(--gold); border-bottom:1px solid rgba(227,164,44,.25); padding-bottom:6px; }
+  .pill { margin-left:auto; padding:3px 10px; border-radius:999px; border:1px solid; font-size:.85rem; white-space:nowrap; }
+  .pill.ok { color:var(--ok); } .pill.warn { color:var(--warn); } .pill.bad { color:var(--bad); }
+  section { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; }
+  .dim { color:var(--dim); } .small { font-size:.85rem; }
+  button { background:linear-gradient(#a0331c,#6e1d0e); color:#fff3d6; border:1px solid #c9a24a; border-radius:5px; padding:7px 14px; font-weight:600; cursor:pointer; font-size:.9rem; }
+  button.ghost { background:transparent; color:var(--gold); }
+  button.danger { background:transparent; border-color:var(--bad); color:var(--bad); }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .grow { flex:1; }
+  ul.clean { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .flavor { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:8px; border-radius:5px; background:rgba(0,0,0,.25); }
+  .code { font:700 1.8rem ui-monospace,monospace; letter-spacing:.2em; color:#fff; background:#000; padding:6px 14px; border-radius:6px; border:1px solid var(--gold); }
+  .act li { display:flex; gap:10px; font-size:.88rem; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.05); }
+  .act time { color:var(--dim); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .act .upload { color:var(--ok); } .act .error { color:var(--bad); }
+  .what { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .what h3 { margin:0 0 6px; font-size:.95rem; }
+  .what ul { margin:0; padding-left:18px; }
+  @media (max-width:640px) { .what { grid-template-columns:1fr; } }
+  input[type=text] { background:#000; color:var(--text); border:1px solid var(--border); border-radius:5px; padding:7px 10px; min-width:0; }
+  label { display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
+  .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/icon.png" alt="" />
+    <div><h1>Rebirth Track Uploader</h1><div class="dim small" id="ver"></div></div>
+    <span class="pill" id="pill">…</span>
+  </header>
+
+  <section id="what">
+    <h2>Qué hace esta app</h2>
+    <div class="what">
+      <div>
+        <h3>✅ En tu PC</h3>
+        <ul>
+          <li>Instala y actualiza el addon <b>Rebirth Track</b> en <code>Interface\AddOns</code> de las versiones de WoW que elijas. Al entrar a una banda, el addon prende el registro de combate del juego.</li>
+          <li>Lee los registros de combate que <b>WoW mismo</b> escribe en <code>Logs\WoWCombatLog*.txt</code>.</li>
+          <li>Guarda su configuración en <code id="cfgdir">%APPDATA%\RebirthTrack</code>.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>⬆️ Qué sube a rebirthknights.fun</h3>
+        <ul>
+          <li>Solo los tramos del registro de combate <b>dentro de bandas</b>: daño, curas, buffs y debuffs, muertes, posiciones y nombres de los participantes, tal como los escribe el juego.</li>
+          <li>En lotes cada 3 minutos, comprimidos, a tu nombre (tu cuenta de Discord en Rebirth Track).</li>
+          <li><b>Nunca</b>: mundo abierto, mazmorras, JcJ, chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún otro archivo de tu PC.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="dim small">Podés pausar la subida cuando quieras, ver todo lo que subiste y borrarlo desde la web (Mis personajes → Mis PCs), o desvincular esta PC.</p>
+    <div class="row" id="consentRow" hidden><button id="consent">Entiendo y acepto</button><span class="dim small">Hasta que aceptes, la app no lee ni sube nada.</span></div>
+  </section>
+
+  <section id="account" hidden>
+    <h2>Cuenta</h2>
+    <div id="linked" hidden class="row">
+      <span class="grow">Vinculada a <b id="user"></b> <span class="dim">(<span id="device"></span>)</span></span>
+      <button class="danger" id="unlink">Desvincular</button>
+    </div>
+    <div id="unlinked" hidden>
+      <p>Vinculá esta PC con tu cuenta de Rebirth Track (Discord) para que lo que subas quede a tu nombre.</p>
+      <div class="row" id="linkStart"><button id="link">Vincular con Discord</button></div>
+      <div id="linkCode" hidden>
+        <p>Confirmá este código en el navegador (se abrió solo):</p>
+        <div class="row"><span class="code" id="code"></span><a id="verify" target="_blank" rel="noopener" class="small">Abrir de nuevo</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="wow" hidden>
+    <h2>World of Warcraft</h2>
+    <div class="row small"><span class="dim">Carpeta:</span><input type="text" id="root" class="grow" /><button class="ghost" id="saveRoot">Usar esta carpeta</button></div>
+    <p class="err small" id="rootErr" hidden></p>
+    <ul class="clean" id="flavors" style="margin-top:10px"></ul>
+    <div class="row small" style="margin-top:10px">
+      <label><input type="checkbox" id="addonAuto" /> Mantener el addon actualizado solo</label>
+      <button class="ghost" id="addonNow">Instalar/actualizar addon ahora</button>
+    </div>
+  </section>
+
+  <section id="upload" hidden>
+    <h2>Subida</h2>
+    <div class="row">
+      <span class="grow" id="uploadInfo"></span>
+      <button class="ghost" id="now">Subir ahora</button>
+      <button id="pause"></button>
+    </div>
+    <div class="row small" style="margin-top:10px"><label><input type="checkbox" id="autostart" /> Iniciar con Windows (minimizada en la bandeja)</label></div>
+  </section>
+
+  <section>
+    <h2>Actividad</h2>
+    <ul class="clean act" id="activity"></ul>
+  </section>
+</main>
+<script>
+const K = new URLSearchParams(location.search).get('k')
+const $ = (id) => document.getElementById(id)
+async function call(path, body) {
+  const r = await fetch(path, { method: body === undefined ? 'GET' : 'POST', headers: { 'X-Key': K, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+  const j = await r.json()
+  if (!r.ok) throw new Error(j.error || r.statusText)
+  return j
+}
+const fmt = (d) => d ? new Date(d).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }) : '—'
+const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB'
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
+let rootEditing = false
+function render(s) {
+  $('ver').textContent = 'v' + s.version + ' · ' + s.siteUrl
+  const pill = $('pill')
+  if (!s.consent) { pill.textContent = 'Esperando tu aceptación'; pill.className = 'pill warn' }
+  else if (!s.linked) { pill.textContent = 'Sin vincular'; pill.className = 'pill warn' }
+  else if (s.paused) { pill.textContent = 'En pausa'; pill.className = 'pill warn' }
+  else { pill.textContent = 'Activa'; pill.className = 'pill ok' }
+  $('consentRow').hidden = s.consent
+  for (const id of ['account', 'wow', 'upload']) $(id).hidden = !s.consent
+  $('linked').hidden = !s.linked
+  $('unlinked').hidden = s.linked
+  $('user').textContent = s.userName; $('device').textContent = s.deviceName
+  $('linkCode').hidden = !s.linking; $('linkStart').hidden = !!s.linking
+  if (s.linking) { $('code').textContent = s.linking.userCode; $('verify').href = s.linking.verifyUrl }
+  if (!rootEditing) $('root').value = s.wowRoot || ''
+  const latest = s.addonLatest?.version
+  $('flavors').innerHTML = s.installs?.length ? s.installs.map((i) => `
+    <li class="flavor">
+      <label class="grow"><input type="checkbox" data-flavor="${esc(i.flavor)}" ${i.enabled ? 'checked' : ''}/> <b>${esc(i.label)}</b></label>
+      <span class="small ${i.addonVersion && i.addonVersion === latest ? '' : 'dim'}">Addon: ${i.addonVersion ? 'v' + esc(i.addonVersion) : 'no instalado'}${latest && i.addonVersion !== latest ? ' (última v' + esc(latest) + ')' : ''}</span>
+      <span class="small dim">${i.logs} registro(s)${i.lastLog ? ' · último ' + esc(i.lastLog) : ''}</span>
+    </li>`).join('') : '<li class="dim">No encontré World of Warcraft. Indicá la carpeta arriba (la que contiene _retail_, _classic_era_, etc.).</li>'
+  $('addonAuto').checked = s.addonAutoUpdate
+  $('autostart').checked = s.autostart
+  $('pause').textContent = s.paused ? 'Reanudar' : 'Pausar'
+  $('uploadInfo').innerHTML = s.linked
+    ? `Último ciclo ${fmt(s.lastRun)} · próximo ${fmt(s.nextRun)} · subidos en esta sesión: <b>${kb(s.uploadedBytes)}</b> en ${s.batches} lote(s)`
+    : 'Vinculá la PC para empezar a subir.'
+  $('activity').innerHTML = s.activity.length ? s.activity.slice(0, 60).map((a) => `<li><time>${fmt(a.at)}</time><span class="${esc(a.kind)}">${esc(a.text)}</span></li>`).join('') : '<li class="dim">Sin actividad todavía.</li>'
+}
+async function refresh() { try { render(await call('/api/status')) } catch (e) { $('pill').textContent = 'Sin conexión con la app'; $('pill').className = 'pill bad' } }
+const act = (fn) => async () => { try { render(await fn()) } catch (e) { alert(e.message) } }
+$('consent').onclick = act(() => call('/api/consent', {}))
+$('link').onclick = async () => { try { await call('/api/link', {}); refresh() } catch (e) { alert('No se pudo iniciar la vinculación: ' + e.message) } }
+$('unlink').onclick = act(() => call('/api/unlink', {}))
+$('pause').onclick = act(async () => call('/api/pause', { paused: $('pause').textContent === 'Pausar' }))
+$('now').onclick = act(() => call('/api/upload-now', {}))
+$('addonNow').onclick = act(() => call('/api/addon/install', {}))
+$('addonAuto').onchange = act(() => call('/api/settings', { addonAutoUpdate: $('addonAuto').checked }))
+$('autostart').onchange = act(() => call('/api/settings', { autostart: $('autostart').checked }))
+$('root').onfocus = () => (rootEditing = true)
+$('saveRoot').onclick = async () => { $('rootErr').hidden = true; try { render(await call('/api/settings', { wowRoot: $('root').value })); rootEditing = false } catch (e) { $('rootErr').textContent = e.message; $('rootErr').hidden = false } }
+$('flavors').onchange = (e) => { const f = e.target.dataset?.flavor; if (f) act(() => call('/api/settings', { flavor: f, enabled: e.target.checked }))() }
+refresh(); setInterval(refresh, 3000)
+</script>
+</body>
+</html>

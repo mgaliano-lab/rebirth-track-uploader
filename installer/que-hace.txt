@@ -1,0 +1,38 @@
+﻿REBIRTH TRACK UPLOADER — QUÉ HACE ESTA APP
+
+Rebirth Track Uploader es la app de la guild Rebirth Knights para registrar las bandas
+(raids) de World of Warcraft en https://rebirthknights.fun. Es gratuita y no tiene publicidad.
+
+EN TU PC
+• Se instala solo para tu usuario de Windows (no pide permisos de administrador), en:
+  %LOCALAPPDATA%\Programs\RebirthTrack
+• Instala y mantiene actualizado el addon "Rebirth Track" en la carpeta
+  Interface\AddOns de las versiones de WoW que elijas. El addon, al entrar a una banda,
+  prende el registro de combate del propio juego (/combatlog).
+• Lee los registros de combate que World of Warcraft escribe en
+  World of Warcraft\<versión>\Logs\WoWCombatLog*.txt
+• Guarda su configuración en %APPDATA%\RebirthTrack
+• Muestra un ícono en la bandeja del sistema y un panel en tu navegador
+  (http://127.0.0.1:47812, accesible solo desde tu PC).
+
+QUÉ SUBE A REBIRTHKNIGHTS.FUN
+• Solo los tramos del registro de combate que ocurren DENTRO DE BANDAS: daño, curas,
+  buffs y debuffs, muertes, posiciones y nombres de los personajes participantes,
+  tal como los escribe el juego.
+• En lotes cada 3 minutos, comprimidos y por conexión segura (HTTPS), a nombre de tu
+  cuenta de Rebirth Track (Discord), recién después de que vincules esta PC.
+
+QUÉ NO SUBE NUNCA
+• Registros de mundo abierto, mazmorras ni JcJ (se descartan en tu PC).
+• Chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún
+  otro archivo de tu PC.
+
+TU CONTROL
+• Hasta que aceptes en el panel de la app y vincules tu cuenta, no se lee ni se sube nada.
+• Podés pausar la subida cuando quieras desde el ícono de la bandeja.
+• En la web (Mis personajes → Mis PCs) ves todo lo que subiste, lo podés borrar y podés
+  desvincular la PC.
+• Al desinstalar se quitan la app y el inicio automático, y opcionalmente la configuración.
+  El addon queda en WoW: se borra quitando la carpeta Interface\AddOns\RebirthTrack.
+
+Código fuente y contacto: https://rebirthknights.fun
