@@ -141,10 +141,12 @@ FunctionEnd
 !define WEBVIEW2_KEY "Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 Function HasWebView2
   ReadRegStr $0 HKLM "SOFTWARE\WOW6432Node\${WEBVIEW2_KEY}" "pv"
-  ${If} $0 == "" ${OrIf} $0 == "0.0.0.0"
+  ${If} $0 == ""
+  ${OrIf} $0 == "0.0.0.0"
     ReadRegStr $0 HKLM "SOFTWARE\${WEBVIEW2_KEY}" "pv"
   ${EndIf}
-  ${If} $0 == "" ${OrIf} $0 == "0.0.0.0"
+  ${If} $0 == ""
+  ${OrIf} $0 == "0.0.0.0"
     ReadRegStr $0 HKCU "Software\${WEBVIEW2_KEY}" "pv"
   ${EndIf}
 FunctionEnd
@@ -155,9 +157,11 @@ Function .onInstSuccess
     Return
   ${EndIf}
   Call HasWebView2
-  ${If} $0 == "" ${OrIf} $0 == "0.0.0.0"
-    MessageBox MB_YESNO|MB_ICONINFORMATION "Para ver el panel en su propia ventana hace falta Microsoft Edge WebView2, que a esta PC le falta.$\r$\n$\r$\nLa app funciona igual (el panel se abre en el navegador). ¿Descargar el instalador oficial de Microsoft ahora?" IDNO +2
+  ${If} $0 == ""
+  ${OrIf} $0 == "0.0.0.0"
+    MessageBox MB_YESNO|MB_ICONINFORMATION "Para ver el panel en su propia ventana hace falta Microsoft Edge WebView2, que a esta PC le falta.$\r$\n$\r$\nLa app funciona igual (el panel se abre en el navegador). ¿Descargar el instalador oficial de Microsoft ahora?" IDNO webview2_skip
       ExecShell "open" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+    webview2_skip:
   ${EndIf}
 FunctionEnd
 
