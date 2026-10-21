@@ -225,6 +225,7 @@ func (a *App) Cycle() {
 		if s.Disabled[in.Flavor] {
 			continue
 		}
+		a.sendLinks(in)
 		files, err := logs.List(in.LogsDir())
 		if err != nil {
 			continue // sin carpeta Logs todavía
@@ -609,4 +610,39 @@ func (a *App) batchEveryLocked() time.Duration {
 		return time.Duration(a.cfg.BatchSeconds) * time.Second
 	}
 	return 3 * time.Minute
+}
+
+// sendLinks manda al sitio los personajes que el jugador pidió vincular desde el addon.
+func (a *App) sendLinks(in wow.Install) {
+	reqs := in.LinkRequests()
+	if len(reqs) == 0 {
+		return
+	}
+	sent := a.Store.Read().LinksSent
+	c := a.client()
+	for _, r := range reqs {
+		if sent[r.Raw] {
+			continue
+		}
+		res, code, err := c.LinkCharacter(in.Flavor, r)
+		if errors.Is(err, api.ErrUnauthorized) {
+			return
+		}
+		if err != nil {
+			a.log("error", "No pude vincular %s-%s: %v", r.Name, r.Realm, err)
+			// Un error definitivo del sitio (4xx: ej. ya es de otra persona) no se reintenta.
+			if code < 400 || code >= 500 {
+				continue
+			}
+		} else {
+			a.log("info", "Personaje %s-%s vinculado a tu cuenta (%s).", res.Name, res.Realm, in.Label)
+		}
+		raw := r.Raw
+		a.Store.Update(func(s *state.State) {
+			if s.LinksSent == nil {
+				s.LinksSent = map[string]bool{}
+			}
+			s.LinksSent[raw] = true
+		})
+	}
 }

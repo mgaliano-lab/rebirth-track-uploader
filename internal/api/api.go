@@ -157,6 +157,22 @@ func (c *Client) RestartSession(sessionID int) error {
 	return err
 }
 
+// CharacterLinked es lo que devuelve el sitio al vincular un personaje desde el addon.
+type CharacterLinked struct {
+	Name  string `json:"name"`
+	Realm string `json:"realm"`
+	Game  string `json:"game"`
+}
+
+// LinkCharacter vincula al usuario de esta PC un personaje pedido desde el addon. Devuelve el
+// código HTTP para distinguir errores definitivos (4xx) de los que conviene reintentar.
+func (c *Client) LinkCharacter(flavor string, r any) (CharacterLinked, int, error) {
+	var out CharacterLinked
+	b, h := jsonBody(map[string]any{"flavor": flavor, "character": r})
+	code, err := c.do("POST", "/api/uploader/characters", b, h, &out)
+	return out, code, err
+}
+
 // SendBatch comprime y sube un lote.
 func (c *Client) SendBatch(sessionID, seq int, offsetStart, offsetEnd int64, data []byte) (BatchResult, error) {
 	var gz bytes.Buffer

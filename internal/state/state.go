@@ -38,6 +38,7 @@ type State struct {
 	AppAuto    bool                     `json:"appAutoUpdate"`
 	Every      int                      `json:"uploadEverySeconds,omitempty"` // 0 = lo que diga el sitio (3 min)
 	Files      map[string]*FileProgress `json:"files"`
+	LinksSent  map[string]bool          `json:"linksSent,omitempty"` // pedidos del addon ya enviados al sitio
 }
 
 type Store struct {
