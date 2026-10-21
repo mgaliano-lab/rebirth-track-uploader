@@ -23,7 +23,9 @@ type LinkRequest struct {
 	Build   string `json:"build"`
 }
 
-var linkRe = regexp.MustCompile(`"(v1\|[^"\n]*)"`)
+// Al guardar las SavedVariables, WoW escapa cada «|» como «||» (es el carácter de escape de
+// sus textos): en disco el pedido queda "v1||us||Reino||…". Se aceptan las dos formas.
+var linkRe = regexp.MustCompile(`"(v1\|\|?[^"\n]*)"`)
 
 // LinkRequests lee los pedidos de todas las cuentas de esta versión de WoW.
 func (i Install) LinkRequests() []LinkRequest {
@@ -35,7 +37,7 @@ func (i Install) LinkRequests() []LinkRequest {
 			continue
 		}
 		for _, m := range linkRe.FindAllStringSubmatch(string(b), -1) {
-			if r, ok := parseLink(m[1]); ok {
+			if r, ok := parseLink(strings.ReplaceAll(m[1], "||", "|")); ok {
 				out = append(out, r)
 			}
 		}
