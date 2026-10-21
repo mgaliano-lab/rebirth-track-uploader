@@ -173,6 +173,12 @@ func (c *Client) LinkCharacter(flavor string, r any) (CharacterLinked, int, erro
 	return out, code, err
 }
 
+// SendGroups sube los grupos de banda que anotó el addon.
+func (c *Client) SendGroups(snapshots any) (int, error) {
+	b, h := jsonBody(map[string]any{"snapshots": snapshots})
+	return c.do("POST", "/api/uploader/groups", b, h, nil)
+}
+
 // SendBatch comprime y sube un lote.
 func (c *Client) SendBatch(sessionID, seq int, offsetStart, offsetEnd int64, data []byte) (BatchResult, error) {
 	var gz bytes.Buffer

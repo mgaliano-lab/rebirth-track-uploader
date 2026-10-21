@@ -226,6 +226,7 @@ func (a *App) Cycle() {
 			continue
 		}
 		a.sendLinks(in)
+		a.sendGroups(in)
 		files, err := logs.List(in.LogsDir())
 		if err != nil {
 			continue // sin carpeta Logs todavía
@@ -610,6 +611,43 @@ func (a *App) batchEveryLocked() time.Duration {
 		return time.Duration(a.cfg.BatchSeconds) * time.Second
 	}
 	return 3 * time.Minute
+}
+
+// sendGroups manda al sitio los grupos de banda nuevos que anotó el addon. Lo enviado se recuerda
+// mientras siga en el archivo (el addon guarda los últimos 300), así la lista no crece sin fin.
+func (a *App) sendGroups(in wow.Install) {
+	snaps := in.GroupSnapshots()
+	if len(snaps) == 0 {
+		return
+	}
+	sent := a.Store.Read().GroupsSent
+	var pending []wow.GroupSnapshot
+	for _, s := range snaps {
+		if !sent[s.Raw] {
+			pending = append(pending, s)
+		}
+	}
+	if len(pending) == 0 {
+		return
+	}
+	if _, err := a.client().SendGroups(pending); err != nil {
+		if !errors.Is(err, api.ErrUnauthorized) {
+			a.log("error", "No pude subir los grupos de banda: %v", err)
+		}
+		return
+	}
+	a.Store.Update(func(st *state.State) {
+		keep := map[string]bool{}
+		for _, s := range snaps {
+			if st.GroupsSent[s.Raw] {
+				keep[s.Raw] = true
+			}
+		}
+		for _, s := range pending {
+			keep[s.Raw] = true
+		}
+		st.GroupsSent = keep
+	})
 }
 
 // sendLinks manda al sitio los personajes que el jugador pidió vincular desde el addon.
