@@ -73,6 +73,9 @@ func (a *App) CheckApp(force bool) {
 	}
 	path, err := update.Download(rel, asset, filepath.Join(dir, "updates"))
 	if err == nil {
+		if a.BeforeUpdate != nil {
+			a.BeforeUpdate()
+		}
 		err = applyUpdate(mode, path)
 	}
 	if err != nil {

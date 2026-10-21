@@ -47,25 +47,28 @@ type Linking struct {
 }
 
 type App struct {
-	Version   string
-	BaseURL   string
-	Store     *state.Store
-	OpenURL   func(string)
-	mu        sync.Mutex
-	activity  []Activity
-	linking   *Linking
-	cfg       *api.Config
-	latest    *addon.Release
-	lastRun   time.Time
-	running   bool
-	uploaded  int64
-	batches   int
-	wake      chan struct{}
-	appLatest *update.Release
-	updating  bool
-	Quit      func()          // cierra la app (la pone main); se usa al actualizarse
-	imports   map[string]bool // archivos viejos elegidos para importar; se aplican al empezar el ciclo
-	scans     map[string]scanCache
+	Version string
+	BaseURL string
+	Store   *state.Store
+	OpenURL func(string)
+	// BeforeUpdate corre justo antes de reemplazar la app por la versión nueva (ej. recordar
+	// que el panel estaba abierto, para reabrirlo cuando vuelva).
+	BeforeUpdate func()
+	mu           sync.Mutex
+	activity     []Activity
+	linking      *Linking
+	cfg          *api.Config
+	latest       *addon.Release
+	lastRun      time.Time
+	running      bool
+	uploaded     int64
+	batches      int
+	wake         chan struct{}
+	appLatest    *update.Release
+	updating     bool
+	Quit         func()          // cierra la app (la pone main); se usa al actualizarse
+	imports      map[string]bool // archivos viejos elegidos para importar; se aplican al empezar el ciclo
+	scans        map[string]scanCache
 }
 
 func New(version, baseURL string, st *state.Store, open func(string)) *App {

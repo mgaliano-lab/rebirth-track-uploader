@@ -29,6 +29,9 @@ type Server struct {
 	App *app.App
 	Key string
 	ln  net.Listener
+	// OnShow muestra el panel de esta instancia (lo pide una segunda instancia, ej. al abrir
+	// el acceso directo con la app ya corriendo).
+	OnShow func()
 }
 
 // URL del panel con la clave.
@@ -73,6 +76,19 @@ func Listen(a *app.App, stateDir string) (*Server, error) {
 	return &Server{App: a, Key: key, ln: ln}, nil
 }
 
+// ShowRunning le pide a la instancia que ya está corriendo que muestre su panel.
+func ShowRunning(stateDir string) bool {
+	k, _ := os.ReadFile(KeyFile(stateDir))
+	req, _ := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%d/show", Port), nil)
+	req.Header.Set("X-Key", strings.TrimSpace(string(k)))
+	res, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
+	if err != nil {
+		return false
+	}
+	res.Body.Close()
+	return res.StatusCode == http.StatusOK
+}
+
 // RunningURL arma la URL del panel de la instancia que ya está corriendo.
 func RunningURL(stateDir string) string {
 	k, _ := os.ReadFile(KeyFile(stateDir))
@@ -83,6 +99,14 @@ func (s *Server) Serve() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Rebirth-Track", "1")
+		w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("POST /show", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Key") != s.Key || s.OnShow == nil {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		go s.OnShow()
 		w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("GET /icon.png", func(w http.ResponseWriter, r *http.Request) {

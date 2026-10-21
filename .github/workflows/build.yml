@@ -84,5 +84,8 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           (cd dist && sha256sum *.exe *.msix > SHA256SUMS.txt)
-          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Rebirth Track Uploader $VERSION" \
+          # Un tag con sufijo (v0.2.0-beta.1) sale como pre-release: la actualización automática y el
+          # sitio miran el último release estable, así que solo lo instala quien tenga el link.
+          PRE=""; if [[ "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Rebirth Track Uploader $VERSION" $PRE \
             --notes "El MSIX es el que se publica en la Microsoft Store (firmado por Microsoft). El instalador .exe se incluye para revisión. Verificá los archivos con SHA256SUMS.txt."

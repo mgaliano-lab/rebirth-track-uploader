@@ -1,6 +1,7 @@
 // Rebirth Track Uploader: instala el addon Rebirth Track y sube a rebirthknights.fun los tramos
-// de bandas de los registros de combate de WoW. Corre en la bandeja del sistema; el panel se
-// abre en el navegador (http://127.0.0.1:47812, solo local).
+// de bandas de los registros de combate de WoW. Corre en la bandeja del sistema; el panel
+// (http://127.0.0.1:47812, solo local) se abre en una ventana propia (WebView2) o, si la PC no
+// lo tiene, en el navegador.
 package main
 
 import (
@@ -13,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/app"
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/state"
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/ui"
+	"github.com/mgaliano-lab/rebirth-track-uploader/internal/window"
 )
 
 var version = "dev"
@@ -64,12 +67,29 @@ func main() {
 		srv, err = ui.Listen(a, stateDir)
 	}
 	if errors.Is(err, ui.ErrRunning) {
-		openURL(ui.RunningURL(stateDir)) // ya estaba abierta: mostrar su panel
+		// Ya estaba abierta: que muestre su ventana (o, si es una versión vieja, su panel en el navegador).
+		if !ui.ShowRunning(stateDir) {
+			openURL(ui.RunningURL(stateDir))
+		}
 		return
 	}
 	if err != nil {
 		fatal(err)
 	}
+	win := window.New(stateDir, iconICO, openURL)
+	showPanel := func() { win.Show(srv.URL()) }
+	if *headless {
+		showPanel = func() { openURL(srv.URL()) }
+	}
+	srv.OnShow = showPanel
+	// Si el panel estaba abierto al actualizarse, la versión nueva lo vuelve a abrir.
+	reopen := filepath.Join(stateDir, "reopen-panel")
+	a.BeforeUpdate = func() {
+		if win.IsOpen() {
+			_ = os.WriteFile(reopen, nil, 0o600)
+		}
+	}
+	reopenAfterUpdate := os.Remove(reopen) == nil
 	go func() {
 		if err := srv.Serve(); err != nil {
 			log.Println("panel:", err)
@@ -85,8 +105,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { a.Run(ctx); close(done) }()
-	if !(*minimized || app.StartedAtLogin()) || st.Read().ConsentAt == nil {
-		openURL(srv.URL())
+	if !(*minimized || app.StartedAtLogin()) || st.Read().ConsentAt == nil || reopenAfterUpdate {
+		showPanel()
 	}
 	quit := func() { cancel(); <-done }
 
@@ -119,12 +139,12 @@ func main() {
 			}
 		}
 		syncPause()
-		systray.SetOnTapped(func() { openURL(srv.URL()) })
+		systray.SetOnTapped(showPanel)
 		go func() {
 			for {
 				select {
 				case <-mOpen.ClickedCh:
-					openURL(srv.URL())
+					showPanel()
 				case <-mNow.ClickedCh:
 					a.UploadNow()
 				case <-mSite.ClickedCh:

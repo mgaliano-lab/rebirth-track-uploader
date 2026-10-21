@@ -135,9 +135,29 @@ Function .onInit
   ${EndIf}
 FunctionEnd
 
+; El panel se muestra en una ventana propia con WebView2 (el motor de Edge; viene con Windows
+; 10/11). Si falta, la app igual anda (abre el panel en el navegador) y acá se ofrece instalarlo
+; con el instalador oficial de Microsoft.
+!define WEBVIEW2_KEY "Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+Function HasWebView2
+  ReadRegStr $0 HKLM "SOFTWARE\WOW6432Node\${WEBVIEW2_KEY}" "pv"
+  ${If} $0 == "" ${OrIf} $0 == "0.0.0.0"
+    ReadRegStr $0 HKLM "SOFTWARE\${WEBVIEW2_KEY}" "pv"
+  ${EndIf}
+  ${If} $0 == "" ${OrIf} $0 == "0.0.0.0"
+    ReadRegStr $0 HKCU "Software\${WEBVIEW2_KEY}" "pv"
+  ${EndIf}
+FunctionEnd
+
 Function .onInstSuccess
   ${If} ${Silent}
     Exec '"$INSTDIR\${EXE}" --minimized'
+    Return
+  ${EndIf}
+  Call HasWebView2
+  ${If} $0 == "" ${OrIf} $0 == "0.0.0.0"
+    MessageBox MB_YESNO|MB_ICONINFORMATION "Para ver el panel en su propia ventana hace falta Microsoft Edge WebView2, que a esta PC le falta.$\r$\n$\r$\nLa app funciona igual (el panel se abre en el navegador). ¿Descargar el instalador oficial de Microsoft ahora?" IDNO +2
+      ExecShell "open" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
   ${EndIf}
 FunctionEnd
 
