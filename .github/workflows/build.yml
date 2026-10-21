@@ -3,6 +3,7 @@
 #  - build (Linux, Docker): tests + .exe + instalador NSIS.
 #  - msix (Windows): tests en Windows (incluye DPAPI) + paquete MSIX para la Microsoft Store.
 #  - release (tag vX.Y.Z, environment "release" con aprobación): GitHub Release con todo.
+#  - store (solo tags estables): sube el MSIX a la Microsoft Store y lo manda a certificación.
 name: build
 
 on:
@@ -89,3 +90,41 @@ jobs:
           PRE=""; if [[ "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Rebirth Track Uploader $VERSION" $PRE \
             --notes "El MSIX es el que se publica en la Microsoft Store (firmado por Microsoft). El instalador .exe se incluye para revisión. Verificá los archivos con SHA256SUMS.txt."
+
+  # Microsoft Store: sube el MSIX y lo manda a certificación (Microsoft lo revisa antes de
+  # publicarlo). Solo tags estables: las betas (vX.Y.Z-beta.N) no van a la Store. Necesita la app
+  # de Microsoft Entra de Partner Center en los secrets PARTNER_CENTER_*; sin ellos, se saltea.
+  # Si todavía hay un envío en certificación, la Store no acepta otro: el job falla y se reintenta.
+  store:
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+    needs: [msix, release]
+    runs-on: windows-2025
+    environment: release
+    env:
+      STORE_APP_ID: 9NHNP7JCN1BG
+      TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+      SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+      CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+      CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+    steps:
+      - name: ¿Hay credenciales?
+        id: creds
+        shell: pwsh
+        run: |
+          if ($env:TENANT_ID -and $env:SELLER_ID -and $env:CLIENT_ID -and $env:CLIENT_SECRET) { "ok=true" >> $env:GITHUB_OUTPUT }
+          else { Write-Output "::notice::Sin secrets PARTNER_CENTER_*: no se sube a la Store (subilo a mano en Partner Center)." }
+      - if: steps.creds.outputs.ok == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: msix
+          path: msix
+      - if: steps.creds.outputs.ok == 'true'
+        uses: microsoft/setup-msstore-cli@v1.4
+      - name: Subir a la Microsoft Store
+        if: steps.creds.outputs.ok == 'true'
+        shell: pwsh
+        run: |
+          msstore reconfigure --tenantId $env:TENANT_ID --sellerId $env:SELLER_ID --clientId $env:CLIENT_ID --clientSecret $env:CLIENT_SECRET
+          $pkg = (Get-ChildItem msix -Filter *.msix | Select-Object -First 1).FullName
+          Write-Output "Subiendo $pkg"
+          msstore publish $pkg --appId $env:STORE_APP_ID --output-stream stdout
