@@ -40,6 +40,7 @@ type State struct {
 	Files      map[string]*FileProgress `json:"files"`
 	LinksSent  map[string]bool          `json:"linksSent,omitempty"`  // pedidos del addon ya enviados al sitio
 	GroupsSent map[string]bool          `json:"groupsSent,omitempty"` // grupos de banda del addon ya enviados
+	GuildSent  map[string]bool          `json:"guildSent,omitempty"`  // guild del addon ya enviada (hash del contenido)
 }
 
 type Store struct {

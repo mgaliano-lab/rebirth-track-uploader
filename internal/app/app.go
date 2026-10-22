@@ -230,6 +230,7 @@ func (a *App) Cycle() {
 		}
 		a.sendLinks(in)
 		a.sendGroups(in)
+		a.sendGuild(in)
 		files, err := logs.List(in.LogsDir())
 		if err != nil {
 			continue // sin carpeta Logs todavía
@@ -650,6 +651,50 @@ func (a *App) sendGroups(in wow.Install) {
 			keep[s.Raw] = true
 		}
 		st.GroupsSent = keep
+	})
+}
+
+// sendGuild manda al sitio la guild que anotó el addon (miembros y personajes anunciados por el
+// canal de la guild) cuando cambió. Se recuerda solo el último contenido enviado de cada cuenta.
+func (a *App) sendGuild(in wow.Install) {
+	guilds := in.Guilds()
+	if len(guilds) == 0 {
+		return
+	}
+	sent := a.Store.Read().GuildSent
+	c := a.client()
+	var done []string
+	for _, g := range guilds {
+		key := in.Flavor + ":" + g.Hash
+		if sent[key] {
+			done = append(done, key)
+			continue
+		}
+		res, code, err := c.SendGuild(in.Flavor, g)
+		if errors.Is(err, api.ErrUnauthorized) {
+			return
+		}
+		if err != nil {
+			a.log("error", "No pude subir la guild %s: %v", g.Name, err)
+			if code < 400 || code >= 500 {
+				continue // se reintenta en la próxima pasada
+			}
+		} else {
+			a.log("info", "Guild %s: %d miembros y %d personajes anunciados subidos al sitio (%s).", g.Name, res.Members, res.Known, in.Label)
+		}
+		done = append(done, key)
+	}
+	a.Store.Update(func(st *state.State) {
+		keep := map[string]bool{}
+		for k := range st.GuildSent {
+			if !strings.HasPrefix(k, in.Flavor+":") {
+				keep[k] = true
+			}
+		}
+		for _, k := range done {
+			keep[k] = true
+		}
+		st.GuildSent = keep
 	})
 }
 

@@ -179,6 +179,20 @@ func (c *Client) SendGroups(snapshots any) (int, error) {
 	return c.do("POST", "/api/uploader/groups", b, h, nil)
 }
 
+// GuildSynced es lo que devuelve el sitio al recibir la guild del addon.
+type GuildSynced struct {
+	Members int `json:"members"`
+	Known   int `json:"known"`
+}
+
+// SendGuild sube la lista de miembros de la guild y los personajes anunciados por el canal del addon.
+func (c *Client) SendGuild(flavor string, guild any) (GuildSynced, int, error) {
+	var out GuildSynced
+	b, h := jsonBody(map[string]any{"flavor": flavor, "guild": guild})
+	code, err := c.do("POST", "/api/uploader/guild-sync", b, h, &out)
+	return out, code, err
+}
+
 // SendBatch comprime y sube un lote.
 func (c *Client) SendBatch(sessionID, seq int, offsetStart, offsetEnd int64, data []byte) (BatchResult, error) {
 	var gz bytes.Buffer
