@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -157,42 +158,6 @@ func (c *Client) RestartSession(sessionID int) error {
 	return err
 }
 
-// CharacterLinked es lo que devuelve el sitio al vincular un personaje desde el addon.
-type CharacterLinked struct {
-	Name  string `json:"name"`
-	Realm string `json:"realm"`
-	Game  string `json:"game"`
-}
-
-// LinkCharacter vincula al usuario de esta PC un personaje pedido desde el addon. Devuelve el
-// código HTTP para distinguir errores definitivos (4xx) de los que conviene reintentar.
-func (c *Client) LinkCharacter(flavor string, r any) (CharacterLinked, int, error) {
-	var out CharacterLinked
-	b, h := jsonBody(map[string]any{"flavor": flavor, "character": r})
-	code, err := c.do("POST", "/api/uploader/characters", b, h, &out)
-	return out, code, err
-}
-
-// SendGroups sube los grupos de banda que anotó el addon.
-func (c *Client) SendGroups(snapshots any) (int, error) {
-	b, h := jsonBody(map[string]any{"snapshots": snapshots})
-	return c.do("POST", "/api/uploader/groups", b, h, nil)
-}
-
-// GuildSynced es lo que devuelve el sitio al recibir la guild del addon.
-type GuildSynced struct {
-	Members int `json:"members"`
-	Known   int `json:"known"`
-}
-
-// SendGuild sube la lista de miembros de la guild y los personajes anunciados por el canal del addon.
-func (c *Client) SendGuild(flavor string, guild any) (GuildSynced, int, error) {
-	var out GuildSynced
-	b, h := jsonBody(map[string]any{"flavor": flavor, "guild": guild})
-	code, err := c.do("POST", "/api/uploader/guild-sync", b, h, &out)
-	return out, code, err
-}
-
 // SendBatch comprime y sube un lote.
 func (c *Client) SendBatch(sessionID, seq int, offsetStart, offsetEnd int64, data []byte) (BatchResult, error) {
 	var gz bytes.Buffer
@@ -214,4 +179,77 @@ func (c *Client) SendBatch(sessionID, seq int, offsetStart, offsetEnd int64, dat
 		res.OffsetEnd = offsetEnd
 	}
 	return res, err
+}
+
+// Scans baja el manifiesto de relevamientos (firmado). Con el ETag de la última vez, si no cambió
+// el sitio contesta 304 y notModified=true.
+func (c *Client) Scans(etag string) (env []byte, newEtag string, notModified bool, err error) {
+	req, err := http.NewRequest("GET", c.BaseURL+"/api/uploader/scans", nil)
+	if err != nil {
+		return nil, "", false, err
+	}
+	req.Header.Set("User-Agent", "RebirthTrackUploader/"+c.AppVersion)
+	req.Header.Set("X-App-Version", c.AppVersion)
+	if etag != "" {
+		req.Header.Set("If-None-Match", etag)
+	}
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, "", false, err
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	switch {
+	case res.StatusCode == http.StatusNotModified:
+		return nil, etag, true, nil
+	case res.StatusCode >= 400:
+		var e apiError
+		_ = json.Unmarshal(b, &e)
+		if e.Message == "" {
+			e.Message = res.Status
+		}
+		return nil, "", false, fmt.Errorf("%s", e.Message)
+	}
+	return b, res.Header.Get("ETag"), false, nil
+}
+
+// FileResult es lo que devuelve el sitio al recibir un archivo de un relevamiento: si ya lo tenía
+// y lo que pasó al procesarlo (para la actividad del panel).
+type FileResult struct {
+	Sent      int
+	Duplicate bool     `json:"duplicate"`
+	Messages  []string `json:"messages"`
+}
+
+// UploadFile es un archivo que pide el manifiesto, tal cual está en disco.
+type UploadFile struct {
+	Endpoint        string // del manifiesto (validado: /api/uploader/…)
+	ScanID          string
+	Flavor          string
+	Path            string // relativa a la carpeta de la versión, con «/»
+	SHA256          string
+	ModTime         time.Time
+	ManifestVersion int
+	Data            []byte
+}
+
+// SendFile comprime y sube un archivo de un relevamiento. Devuelve el código HTTP para distinguir
+// rechazos definitivos (4xx) de errores que conviene reintentar.
+func (c *Client) SendFile(f UploadFile) (FileResult, int, error) {
+	var gz bytes.Buffer
+	w, _ := gzip.NewWriterLevel(&gz, gzip.BestCompression)
+	w.Write(f.Data)
+	w.Close()
+	var res FileResult
+	code, err := c.do("POST", f.Endpoint, bytes.NewReader(gz.Bytes()), map[string]string{
+		"Content-Type":       "application/gzip",
+		"X-Scan-Id":          f.ScanID,
+		"X-Flavor":           f.Flavor,
+		"X-Path":             url.PathEscape(f.Path),
+		"X-Sha256":           f.SHA256,
+		"X-Modified-At":      strconv.FormatInt(f.ModTime.Unix(), 10),
+		"X-Manifest-Version": strconv.Itoa(f.ManifestVersion),
+	}, &res)
+	res.Sent = gz.Len()
+	return res, code, err
 }

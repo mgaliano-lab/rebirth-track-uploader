@@ -122,7 +122,7 @@ func (a *App) OldLogs() ([]OldLog, error) {
 // scan cachea el resumen por archivo mientras no cambie (los logs viejos pueden pesar cientos de MB).
 func (a *App) scan(key string, f logs.File, end int64, raid logs.Instances) (scanCache, error) {
 	a.mu.Lock()
-	sc, ok := a.scans[key]
+	sc, ok := a.scanCaches[key]
 	a.mu.Unlock()
 	if ok && sc.size == end && sc.mod.Equal(f.ModTime) {
 		return sc, nil
@@ -133,10 +133,10 @@ func (a *App) scan(key string, f logs.File, end int64, raid logs.Instances) (sca
 	}
 	sc = scanCache{size: end, mod: f.ModTime, first: logs.FirstTimestamp(f.Path), sum: sum}
 	a.mu.Lock()
-	if a.scans == nil {
-		a.scans = map[string]scanCache{}
+	if a.scanCaches == nil {
+		a.scanCaches = map[string]scanCache{}
 	}
-	a.scans[key] = sc
+	a.scanCaches[key] = sc
 	a.mu.Unlock()
 	return sc, nil
 }

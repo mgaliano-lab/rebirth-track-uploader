@@ -65,6 +65,11 @@
   .setup { display:flex; gap:12px; align-items:center; padding:12px 16px; border:1px solid var(--gold); border-radius:8px; background:linear-gradient(90deg,#3a1a08,#1a0d08); }
   .setup .step { flex:none; font:700 .78rem system-ui; color:#000; background:var(--gold); border-radius:999px; padding:3px 10px; white-space:nowrap; }
   .hint { font-size:.75rem; color:var(--dim); text-align:right; }
+  .scans > li { padding:8px; border-radius:5px; background:rgba(0,0,0,.25); }
+  .scans code { word-break:break-all; }
+  .scans .files { list-style:none; margin:6px 0 0; padding:0; font-size:.82rem; }
+  .scans .files li { display:flex; gap:8px; flex-wrap:wrap; }
+  .st-subido, .st-sin { color:var(--ok); } .st-error, .st-rechazado, .st-grande { color:var(--bad); }
 </style>
 </head>
 <body>
@@ -109,6 +114,7 @@
         <ul>
           <li>Instala y actualiza el addon <b>Rebirth Track</b> en <code>Interface\AddOns</code> de las versiones de WoW que elijas. Al entrar a una banda o mazmorra, el addon prende el registro de combate del juego.</li>
           <li>Lee los registros de combate que <b>WoW mismo</b> escribe en <code>Logs\WoWCombatLog*.txt</code>.</li>
+          <li>Lee los archivos de datos de addons que lista el sitio (abajo, en <b>Qué se releva</b>): solo <code>.lua</code> o <code>.txt</code> dentro de la carpeta de WoW.</li>
           <li>Guarda su configuración en <code id="cfgdir">%APPDATA%\RebirthTrack</code>.</li>
         </ul>
       </div>
@@ -117,12 +123,21 @@
         <ul>
           <li>Solo los tramos del registro de combate <b>dentro de bandas y mazmorras</b>: daño, curas, buffs y debuffs, muertes, posiciones y nombres de los participantes, tal como los escribe el juego.</li>
           <li>En lotes cada <span id="everyTxt">3 minutos</span> (lo elegís abajo), comprimidos, a tu nombre (tu cuenta de Discord en Rebirth Track).</li>
-          <li><b>Nunca</b>: mundo abierto, JcJ, chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún otro archivo de tu PC.</li>
+          <li>Los archivos de <b>Qué se releva</b> cuando cambian, comprimidos (por ejemplo, la guild y los pedidos de vincular que anota el addon).</li>
+          <li><b>Nunca</b>: mundo abierto, JcJ, chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún otro archivo de tu PC fuera de los de <b>Qué se releva</b>.</li>
         </ul>
       </div>
     </div>
     <p class="dim small">Podés pausar la subida cuando quieras, ver todo lo que subiste y borrarlo desde la web (Mis personajes → Mis PCs), o desvincular esta PC. <a id="privacy" target="_blank" rel="noopener">Política de privacidad</a>.</p>
     <div class="row" id="consentRow" hidden><button id="consent">Entiendo y acepto</button><span class="dim small">Hasta que aceptes, la app no lee ni sube nada.</span></div>
+  </section>
+
+  <section id="scansSec">
+    <h2>Qué se releva</h2>
+    <p class="dim small">Además de los registros de combate, la app sube estos archivos de la carpeta de cada versión de WoW, cuando cambian. La lista la publica rebirthknights.fun firmada digitalmente y la app la toma sola, sin actualizarse: es solo una lista de archivos, la app nunca ejecuta nada que baje. Rechaza rutas fuera de la carpeta de WoW y cualquier archivo que no sea <code>.lua</code> o <code>.txt</code>.</p>
+    <div class="row small"><span class="grow" id="scansInfo"></span><button class="ghost" id="scansCheck">Buscar cambios</button></div>
+    <p class="err small" id="scansErr" hidden></p>
+    <ul class="clean scans" id="scansList" style="margin-top:10px"></ul>
   </section>
   </div>
 
@@ -343,7 +358,25 @@ function render(s) {
   $('uploadInfo').innerHTML = s.linked
     ? `Último ciclo ${fmt(s.lastRun)} · próximo ${fmt(s.nextRun)} · subidos en esta sesión: <b>${kb(s.uploadedBytes)}</b> en ${s.batches} lote(s)`
     : 'Vinculá la PC para empezar a subir.'
+  renderScans(s)
   $('activity').innerHTML = s.activity.length ? s.activity.slice(0, 60).map((a) => `<li><time>${fmt(a.at)}</time><span class="${esc(a.kind)}">${esc(a.text)}</span></li>`).join('') : '<li class="dim">Sin actividad todavía.</li>'
+}
+const sz = (n) => n < 1024 ? `${n} B` : kb(n)
+const dur = (n) => n % 3600 === 0 ? `${n / 3600} h` : n % 60 === 0 ? `${n / 60} min` : `${n} s`
+const SRC = { sitio: 'del sitio', 'caché': 'guardada (sin conexión con el sitio)', incluido: 'incluida en la app' }
+function renderScans(s) {
+  const m = s.scans || { scans: [] }
+  $('scansInfo').textContent = `Versión ${m.version || 0}${m.updated ? ' del ' + m.updated : ''}, ${SRC[m.source] || m.source}` +
+    (m.checkedAt ? ` · revisada ${fmt(m.checkedAt)} · próxima ${fmt(m.nextCheck)}` : '')
+  $('scansErr').hidden = !m.error
+  $('scansErr').textContent = m.error || ''
+  $('scansList').innerHTML = m.scans.length ? m.scans.map((sc) => `
+    <li>
+      <b>${esc(sc.label)}</b>
+      <div class="small dim">${sc.paths.map((p) => '<code>' + esc(p) + '</code>').join(' · ')}</div>
+      <div class="small dim">${sc.flavors.includes('*') ? 'Todas las versiones activas' : esc(sc.flavors.join(', '))} · cada ${dur(sc.everySeconds)} · hasta ${sz(sc.maxBytes)} por archivo${sc.lastRun ? ' · revisado ' + fmt(sc.lastRun) : ''}</div>
+      ${sc.files.length ? `<ul class="files">${sc.files.map((f) => `<li><span class="st-${esc(f.state.split(' ')[0])}">${esc(f.state)}</span><span>${esc(f.install)} · <code>${esc(f.path)}</code> · ${sz(f.size)}${f.uploadedAt ? ' · subido ' + fmt(f.uploadedAt) : ''}${f.detail ? ' · ' + esc(f.detail) : ''}</span></li>`).join('')}</ul>` : ''}
+    </li>`).join('') : '<li class="dim">El sitio no pide ningún archivo por ahora.</li>'
 }
 // Si la app se reinicia (por ejemplo, al actualizarse sola) el panel se queda esperando y, cuando
 // vuelve con otra versión, se recarga para tomar la interfaz nueva.
@@ -367,6 +400,7 @@ $('unlink').onclick = act(() => call('/api/unlink', {}))
 $('pause').onclick = act(async () => call('/api/pause', { paused: $('pause').textContent === 'Pausar' }))
 $('now').onclick = act(() => call('/api/upload-now', {}))
 $('addonNow').onclick = act(() => call('/api/addon/install', {}))
+$('scansCheck').onclick = act(() => call('/api/scans/check', {}))
 $('addonAuto').onchange = act(() => call('/api/settings', { addonAutoUpdate: $('addonAuto').checked }))
 async function saveEvery(seconds) {
   $('everyErr').hidden = true

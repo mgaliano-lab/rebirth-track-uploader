@@ -11,6 +11,10 @@ EN TU PC
   mazmorra, prende el registro de combate del propio juego (/combatlog).
 • Lee los registros de combate que World of Warcraft escribe en
   World of Warcraft\<versión>\Logs\WoWCombatLog*.txt
+• Lee los archivos de datos de addons que lista el sitio en su manifiesto de
+  relevamientos (hoy: WTF\Account\<cuenta>\SavedVariables\RebirthTrack.lua). La
+  lista está firmada, se ve en el panel de la app y solo puede pedir archivos .lua o
+  .txt dentro de la carpeta de WoW. La app nunca ejecuta nada de lo que descarga.
 • Guarda su configuración en %APPDATA%\RebirthTrack
 • Muestra un ícono en la bandeja del sistema y un panel en tu navegador
   (http://127.0.0.1:47812, accesible solo desde tu PC).
@@ -21,11 +25,13 @@ QUÉ SUBE A REBIRTHKNIGHTS.FUN
   tal como los escribe el juego.
 • En lotes cada 3 minutos, comprimidos y por conexión segura (HTTPS), a nombre de tu
   cuenta de Rebirth Track (Discord), recién después de que vincules esta PC.
+• Los archivos del manifiesto de relevamientos, enteros y comprimidos, cuando cambian
+  (por ejemplo, la guild y los personajes que pediste vincular desde el addon).
 
 QUÉ NO SUBE NUNCA
 • Registros de mundo abierto ni JcJ (se descartan en tu PC).
 • Chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún
-  otro archivo de tu PC.
+  otro archivo de tu PC fuera de los del manifiesto de relevamientos.
 
 TU CONTROL
 • Hasta que aceptes en el panel de la app y vincules tu cuenta, no se lee ni se sube nada.

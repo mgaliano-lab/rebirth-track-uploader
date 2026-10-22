@@ -20,7 +20,8 @@ import (
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/app"
 )
 
-const Port = 47812
+// Port del panel. Se cambia solo para pruebas (--panel-port), p. ej. con otra instancia corriendo.
+var Port = 47812
 
 //go:embed index.html icon.png
 var files embed.FS
@@ -187,6 +188,7 @@ func (s *Server) Serve() error {
 		}
 		return a.Status(), nil
 	})
+	api("POST /api/scans/check", func(r *http.Request) (any, error) { a.CheckScansNow(); return a.Status(), nil })
 	api("POST /api/addon/install", func(r *http.Request) (any, error) { a.CheckAddon(true); return a.Status(), nil })
 	api("POST /api/settings", func(r *http.Request) (any, error) {
 		b := body(r)
