@@ -3,7 +3,7 @@
 #   docker build --build-arg VERSION=1.2.3 [--secret id=sign,src=sign.env] --target dist -o out .
 # Deja en out/: el instalador, el .exe suelto y SHA256SUMS.txt.
 
-FROM golang:1.26-bookworm AS build
+FROM golang:1.27-trixie AS build
 ARG VERSION=0.0.0-dev
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -19,11 +19,11 @@ RUN go vet ./... && go test ./... \
       -ldflags "-H=windowsgui -s -w -X main.version=${VERSION}" \
       -o /out/RebirthTrackUploader.exe ./cmd/rebirthtrack
 
-FROM debian:bookworm-slim AS package
+FROM debian:trixie-slim AS package
 ARG VERSION=0.0.0-dev
 ARG JSIGN_VERSION=7.6
 ARG JSIGN_SHA256=6cf58aa080e7ff82656f320cff8d4a3bff30408df8766806dcba3740dd839fa5
-RUN apt-get update && apt-get install -y --no-install-recommends nsis openjdk-17-jre-headless curl ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends nsis openjdk-21-jre-headless curl ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && curl -fsSL -o /opt/jsign.jar "https://github.com/ebourg/jsign/releases/download/${JSIGN_VERSION}/jsign-${JSIGN_VERSION}.jar" \
  && echo "${JSIGN_SHA256}  /opt/jsign.jar" | sha256sum -c -

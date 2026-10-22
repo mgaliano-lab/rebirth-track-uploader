@@ -24,6 +24,7 @@ changelog: resume todo lo que hace la app hasta ahí.
 - **Registros anteriores**: podés importar las bandas que jugaste antes de instalarla.
 - **Cómoda y a tu ritmo**: vive en la bandeja, tiene su propio panel con pasos para empezar, elegís cada cuánto sube y la podés pausar cuando quieras.
 - **Se actualiza sola** con el instalador; desde la Microsoft Store, se actualiza desde la Store.
+- **Al día y más segura**: todos sus componentes actualizados a las últimas versiones.
 - **Tu privacidad primero**: no lee ni sube nada hasta que aceptás y vinculás la PC con tu Discord; en la web ves y borrás todo lo que subió.
 
 ### Técnico
@@ -32,4 +33,5 @@ changelog: resume todo lo que hace la app hasta ahí.
 - Lectura incremental de `Logs\WoWCombatLog*.txt` con filtro de bandas y mazmorras en la PC (listas de dificultades y mapas desde `/api/uploader/config`); lotes gzip idempotentes por secuencia y reanudación exacta por offset.
 - Vinculación tipo device code con token por PC cifrado con DPAPI; estado en `%APPDATA%\RebirthTrack`.
 - Relevamientos remotos (`internal/scans`): manifiesto firmado con Ed25519 desde `/api/uploader/scans` con ETag y caché local; rutas relativas validadas (sin `..`, solo `.lua`/`.txt`, sin seguir enlaces), topes de tamaño y cantidad; sube cada archivo cuando cambia su SHA-256. Nunca ejecuta nada de lo que baja.
+- Dependencias al día: Go 1.27.3, `godbus/dbus` 5.2.4, imágenes base `golang:1.27-trixie` y `debian:trixie-slim` (OpenJDK 21 para jsign 7.6, el 17 ya no está en trixie).
 - CI: build y tests en cada push; con el tag `vX.Y.Z` arma el GitHub Release con las notas de este changelog, lo anuncia en Discord (token OIDC de GitHub contra `/api/internal/releases`) y manda el MSIX a certificación con `msstore`. Un workflow programado anuncia la versión de la Store cuando Microsoft la publica.
