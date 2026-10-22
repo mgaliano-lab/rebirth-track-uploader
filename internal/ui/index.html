@@ -83,6 +83,11 @@
       </div>
     </div>
   </header>
+  <div class="setup" id="storeBanner" hidden>
+    <span class="step">Versión nueva</span>
+    <span class="grow" id="storeBannerText"></span>
+    <button id="storeBannerBtn">Actualizar en la Store</button>
+  </div>
   <div class="setup" id="setup" hidden>
     <span class="step" id="setupStep"></span>
     <span id="setupText"></span>
@@ -147,7 +152,11 @@
       <span class="dim grow" id="appUpdInfo"></span>
       <button class="ghost" id="appUpdNow">Buscar actualización</button>
     </div>
-    <p class="dim small" id="appUpdStore" hidden>La app se actualiza sola desde la Microsoft Store.</p>
+    <div class="row small" style="margin-top:10px" id="appUpdStore" hidden>
+      <span class="dim grow" id="appStoreInfo">Instalada desde la Microsoft Store: se actualiza desde la Store.</span>
+      <button class="ghost" id="appStoreCheck">Buscar actualización</button>
+      <button id="appStoreOpen" hidden>Actualizar en la Microsoft Store</button>
+    </div>
     <p class="hint" style="text-align:left;margin:10px 0 0">Atajos: <kbd>U</kbd> subir ahora · <kbd>P</kbd> pausar · <kbd>A</kbd> addon · <kbd>B</kbd> buscar actualización · <kbd>W</kbd> sitio · <kbd>1</kbd>–<kbd>5</kbd> pestañas</p>
   </section>
   </div>
@@ -281,7 +290,6 @@ function render(s) {
   $('tPause').textContent = s.paused ? '▶️' : '⏸️'
   $('tPause').dataset.tip = s.paused ? 'Reanudar subida · P' : 'Pausar subida · P'
   $('tPause').classList.toggle('on', s.paused)
-  $('tUpd').hidden = s.appUpdate?.mode === 'store'
   for (const id of ['account', 'wow', 'upload']) $(id).hidden = !s.consent
   $('importSec').hidden = !(s.consent && s.linked)
   $('linked').hidden = !s.linked
@@ -318,6 +326,15 @@ function render(s) {
   $('appUpdRow').hidden = u.mode === 'store'
   $('appUpdStore').hidden = u.mode !== 'store'
   $('appAuto').checked = !!u.auto
+  if (u.mode === 'store') {
+    $('appStoreInfo').textContent = u.available
+      ? `Hay una versión nueva: v${u.latest}. Instalada desde la Microsoft Store, se actualiza desde la Store (si todavía no aparece, Microsoft la está revisando: puede tardar un día).`
+      : u.latest ? `Al día (última v${u.latest}). Instalada desde la Microsoft Store: se actualiza desde la Store.` : 'Instalada desde la Microsoft Store: se actualiza desde la Store.'
+    $('appStoreOpen').hidden = !u.available
+    $('appStoreCheck').hidden = !!u.available
+  }
+  $('storeBanner').hidden = !(u.mode === 'store' && u.available)
+  if (u.mode === 'store' && u.available) $('storeBannerText').textContent = `Salió la v${u.latest} (tenés la v${s.version}). La app de la Microsoft Store se actualiza desde la Store.`
   if (u.updating) { $('pill').textContent = 'Actualizando… se reconecta sola'; $('pill').className = 'pill warn' }
   $('appUpdInfo').textContent = u.updating ? 'Actualizando…' : u.available ? `Hay una versión nueva: v${u.latest}` : u.latest ? `Al día (última v${u.latest})` : ''
   $('appUpdNow').textContent = u.available ? `Actualizar a v${u.latest}` : 'Buscar actualización'
@@ -365,6 +382,9 @@ $('everyN').onfocus = () => (everyEditing = true)
 $('everySave').onclick = () => saveEvery(Math.round(Number($('everyN').value) * Number($('everyU').value)))
 $('appAuto').onchange = act(() => call('/api/settings', { appAutoUpdate: $('appAuto').checked }))
 $('appUpdNow').onclick = act(() => call('/api/app/update', {}))
+$('appStoreCheck').onclick = act(() => call('/api/app/update', {}))
+$('appStoreOpen').onclick = act(() => call('/api/app/store', {}))
+$('storeBannerBtn').onclick = act(() => call('/api/app/store', {}))
 $('autostart').onchange = act(() => call('/api/settings', { autostart: $('autostart').checked }))
 $('root').onfocus = () => (rootEditing = true)
 async function rootAct(path, label) {
