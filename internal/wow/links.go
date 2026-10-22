@@ -21,6 +21,7 @@ type LinkRequest struct {
 	GUID    string `json:"guid"`
 	Project int    `json:"project"` // WOW_PROJECT_ID
 	Build   string `json:"build"`
+	Account string `json:"account"` // carpeta WTF\Account\<cuenta> (ej. 12345678#1: el #N es la licencia WoW1, WoW2…)
 }
 
 // Al guardar las SavedVariables, WoW escapa cada «|» como «||» (es el carácter de escape de
@@ -36,8 +37,10 @@ func (i Install) LinkRequests() []LinkRequest {
 		if err != nil {
 			continue
 		}
+		account := filepath.Base(filepath.Dir(filepath.Dir(f)))
 		for _, m := range linkRe.FindAllStringSubmatch(string(b), -1) {
 			if r, ok := parseLink(strings.ReplaceAll(m[1], "||", "|")); ok {
+				r.Account = account
 				out = append(out, r)
 			}
 		}
