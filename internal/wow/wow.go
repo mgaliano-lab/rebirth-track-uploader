@@ -4,6 +4,7 @@ package wow
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 )
@@ -15,12 +16,22 @@ type Install struct {
 	Dir    string `json:"dir"`
 }
 
+// Labels de las versiones conocidas. WoW Forever es un cliente aparte: en la beta usó
+// _classic_beta_; para el lanzamiento se suma también cualquier otra carpeta _x_ que aparezca
+// (el sitio distingue la versión por WOW_PROJECT_ID, que manda el addon).
 var Labels = map[string]string{
-	"_retail_":      "Retail",
-	"_classic_era_": "Era / WoW Forever",
-	"_anniversary_": "Classic Anniversary",
-	"_classic_":     "Classic (MoP)",
+	"_retail_":       "Retail",
+	"_classic_era_":  "Classic Era",
+	"_anniversary_":  "Classic Anniversary",
+	"_classic_":      "Classic (MoP)",
+	"_classic_beta_": "WoW Forever (beta)",
+	"_forever_":      "WoW Forever",
 }
+
+var flavorRe = regexp.MustCompile(`^_[a-z0-9_]+_$`)
+
+// Carpetas de prueba de Blizzard (PTR, beta de Retail): no son de la guild, no se suben.
+var testRe = regexp.MustCompile(`ptr|^_beta_$|^_alpha_$`)
 
 // Roots devuelve las carpetas candidatas a "World of Warcraft", en orden de preferencia.
 func Roots(override string) []string {
@@ -44,9 +55,18 @@ func Roots(override string) []string {
 func Detect(override string) (root string, installs []Install) {
 	for _, r := range Roots(override) {
 		var found []Install
-		for flavor, label := range Labels {
+		entries, _ := os.ReadDir(r)
+		for _, e := range entries {
+			flavor := e.Name()
+			if !e.IsDir() || !flavorRe.MatchString(flavor) || (Labels[flavor] == "" && testRe.MatchString(flavor)) {
+				continue
+			}
 			dir := filepath.Join(r, flavor)
 			if isDir(filepath.Join(dir, "Interface")) || isDir(filepath.Join(dir, "WTF")) || isDir(filepath.Join(dir, "Logs")) {
+				label := Labels[flavor]
+				if label == "" {
+					label = flavor // versión nueva que todavía no tiene nombre (ej. la de WoW Forever al salir)
+				}
 				found = append(found, Install{Flavor: flavor, Label: label, Dir: dir})
 			}
 		}

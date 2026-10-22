@@ -304,7 +304,7 @@ function render(s) {
       <label class="grow"><input type="checkbox" data-flavor="${esc(i.flavor)}" ${i.enabled ? 'checked' : ''}/> <b>${esc(i.label)}</b></label>
       <span class="small ${i.addonVersion && i.addonVersion === latest ? '' : 'dim'}">Addon: ${i.addonVersion ? 'v' + esc(i.addonVersion) : 'no instalado'}${latest && i.addonVersion !== latest ? ' (última v' + esc(latest) + ')' : ''}</span>
       <span class="small dim">${i.logs} registro(s)${i.lastLog ? ' · último ' + esc(i.lastLog) : ''}</span>
-    </li>`).join('') : '<li class="dim">No encontré World of Warcraft. Indicá la carpeta arriba (la que contiene _retail_, _classic_era_, etc.).</li>'
+    </li>`).join('') : '<li class="dim">No encontré World of Warcraft. Indicá la carpeta arriba (la que contiene _retail_, _classic_era_, la de WoW Forever, etc.).</li>'
   $('addonAuto').checked = s.addonAutoUpdate
   $('autostart').checked = s.autostart
   $('autostartRow').hidden = s.packaged
