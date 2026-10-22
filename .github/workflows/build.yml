@@ -2,8 +2,10 @@
 # Los PRs de forks corren en máquinas descartables de GitHub y no ven los secrets.
 #  - build (Linux, Docker): tests + .exe + instalador NSIS.
 #  - msix (Windows): tests en Windows (incluye DPAPI) + paquete MSIX para la Microsoft Store.
-#  - release (tag vX.Y.Z, environment "release" con aprobación): GitHub Release con todo.
-#  - store (solo tags estables): sube el MSIX a la Microsoft Store y lo manda a certificación.
+#  - release (tag vX.Y.Z, environment "release"): GitHub Release con las notas de CHANGELOG.md y
+#    anuncio en el canal de novedades de Discord (con el link del instalador).
+#  - store (solo tags estables): sube el MSIX a la Microsoft Store y lo manda a certificación. El
+#    anuncio de la Store lo hace store-announce.yml cuando Microsoft la publica.
 name: build
 
 on:
@@ -30,6 +32,10 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.${GITHUB_RUN_NUMBER}-dev.${GITHUB_SHA::7}"; fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
+      # CHANGELOG.md con el formato obligatorio; en un tag estable, con esa versión arriba de todo.
+      - name: Changelog
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* && "$GITHUB_REF_NAME" != *-* ]]; then scripts/changelog-check.sh "${GITHUB_REF_NAME#v}"; else scripts/changelog-check.sh; fi
       - name: Build (.exe + instalador)
         run: docker build --pull --build-arg VERSION="${{ steps.v.outputs.version }}" --target dist -o out .
       - uses: actions/upload-artifact@v7
@@ -74,7 +80,9 @@ jobs:
     environment: release
     permissions:
       contents: write
+      id-token: write # token OIDC para anunciar en el sitio (scripts/announce-release.sh)
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -88,8 +96,17 @@ jobs:
           # Un tag con sufijo (v0.2.0-beta.1) sale como pre-release: la actualización automática y el
           # sitio miran el último release estable, así que solo lo instala quien tenga el link.
           PRE=""; if [[ "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
-          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Rebirth Track Uploader $VERSION" $PRE \
-            --notes "El MSIX es el que se publica en la Microsoft Store (firmado por Microsoft). El instalador .exe se incluye para revisión. Verificá los archivos con SHA256SUMS.txt."
+          { scripts/changelog-section.sh "$VERSION" all 2>/dev/null || true
+            echo; echo "---"; echo
+            echo "El MSIX es el que se publica en la Microsoft Store (firmado por Microsoft). El instalador .exe se incluye para revisión. Verificá los archivos con SHA256SUMS.txt."
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Rebirth Track Uploader $VERSION" $PRE --notes-file notes.md
+      # Las betas no se anuncian (solo las instala quien tenga el link).
+      - name: Anunciar en Discord
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: scripts/announce-release.sh app "$VERSION"
 
   # Microsoft Store: sube el MSIX y lo manda a certificación (Microsoft lo revisa antes de
   # publicarlo). Solo tags estables: las betas (vX.Y.Z-beta.N) no van a la Store. Necesita la app

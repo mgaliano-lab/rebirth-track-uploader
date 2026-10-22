@@ -1,0 +1,39 @@
+# Anuncia en el canal de novedades de Discord la versión de la app que está publicada en la
+# Microsoft Store. El job «store» de build.yml solo la manda a certificación y Microsoft la publica
+# horas o días después: esto mira cada 30 minutos qué versión hay en la Store (catálogo público) y,
+# si es nueva y está en CHANGELOG.md, la anuncia. El sitio no repite un anuncio ya hecho.
+name: store-announce
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # token OIDC para anunciar en el sitio (scripts/announce-release.sh)
+
+concurrency:
+  group: store-announce
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Versión publicada en la Store
+        id: store
+        run: |
+          v=$(curl -sS --fail "https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds=9NHNP7JCN1BG&market=US&languages=en-us" \
+            | jq -r '[.Products[0].DisplaySkuAvailabilities[].Sku.Properties.Packages[]?.PackageFullName] | map(capture("_(?<v>[0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+_").v) | max_by(split(".") | map(tonumber)) // empty')
+          echo "La Store tiene la versión: ${v:-ninguna}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Anunciar en Discord
+        if: steps.store.outputs.version != ''
+        run: |
+          v="${{ steps.store.outputs.version }}"
+          if ! scripts/changelog-section.sh "$v" public >/dev/null 2>&1; then
+            echo "::notice::CHANGELOG.md no tiene la $v (anterior al changelog): no se anuncia."; exit 0
+          fi
+          scripts/announce-release.sh store "$v"

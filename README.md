@@ -102,10 +102,20 @@ REBIRTH_TRACK_NO_BROWSER=1 go run ./cmd/rebirthtrack --headless --site http://lo
 (`ubuntu-latest`), gratis por ser un repo público.
 
 - **push / PR**: compila, corre los tests y arma el instalador **sin firmar** como artefacto.
-- **tag `vX.Y.Z`**, en el environment `release` (con revisor requerido):
-  1. build **firmado**;
-  2. GitHub Release;
-  3. publicación en `ast.rebirthknights.fun/uploader/`, de donde lo ofrece la web.
+- **tag `vX.Y.Z`** (environment `release`, solo tags `v*`):
+  1. build **firmado**, con [`CHANGELOG.md`](CHANGELOG.md) validado y esa versión arriba de todo;
+  2. GitHub Release con las notas del changelog y anuncio en el canal de novedades de Discord
+     (`scripts/announce-release.sh`, autenticado con el token OIDC de GitHub);
+  3. el MSIX a certificación en la Microsoft Store (`msstore`, con la app de Entra
+     `rebirth-track-uploader-ci` en los secrets `PARTNER_CENTER_*`). Se publica sola al aprobarse.
+- **cada 30 min** ([`store-announce.yml`](.github/workflows/store-announce.yml)): si la Store ya
+  publicó una versión nueva, la anuncia en Discord con el link de la Store.
+
+### Changelog
+
+Formato obligatorio (lo valida `scripts/changelog-check.sh` en cada build): por versión,
+`## [X.Y.Z] - AAAA-MM-DD` con `### Para todos` (lo que se anuncia en Discord, sin tecnicismos) y
+`### Técnico`.
 
 ### Firma (Authenticode)
 
