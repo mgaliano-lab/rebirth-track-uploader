@@ -38,9 +38,9 @@ type State struct {
 	AppAuto    bool                     `json:"appAutoUpdate"`
 	Every      int                      `json:"uploadEverySeconds,omitempty"` // 0 = lo que diga el sitio (3 min)
 	Files      map[string]*FileProgress `json:"files"`
-	LinksSent  map[string]bool          `json:"linksSent,omitempty"`  // pedidos del addon ya enviados al sitio
-	GroupsSent map[string]bool          `json:"groupsSent,omitempty"` // grupos de banda del addon ya enviados
-	GuildSent  map[string]bool          `json:"guildSent,omitempty"`  // guild del addon ya enviada (hash del contenido)
+	// Relevamientos: SHA-256 de lo último subido (o rechazado por el sitio) de cada archivo, por
+	// "versión|relevamiento|ruta". Un archivo se vuelve a subir solo si cambió.
+	ScansSent map[string]string `json:"scansSent,omitempty"`
 }
 
 type Store struct {
@@ -113,6 +113,9 @@ func (st *Store) Update(fn func(s *State)) error {
 	}
 	return os.Rename(tmp, st.path)
 }
+
+// Dir es la carpeta de datos de la app (ahí también va la caché del manifiesto de relevamientos).
+func (st *Store) Dir() string { return filepath.Dir(st.path) }
 
 // File devuelve (creando si hace falta) el progreso de un archivo, bajo el lock.
 func (st *Store) File(key string) FileProgress {

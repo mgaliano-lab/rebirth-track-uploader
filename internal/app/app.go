@@ -68,7 +68,11 @@ type App struct {
 	updating     bool
 	Quit         func()          // cierra la app (la pone main); se usa al actualizarse
 	imports      map[string]bool // archivos viejos elegidos para importar; se aplican al empezar el ciclo
-	scans        map[string]scanCache
+	scanCaches   map[string]scanCache
+	scans        scanState
+	// ExtraScanKeys: claves públicas adicionales para el manifiesto de relevamientos (pruebas
+	// contra un sitio local con su propia clave; las de producción están en scans.TrustedKeys).
+	ExtraScanKeys []string
 }
 
 func New(version, baseURL string, st *state.Store, open func(string)) *App {
@@ -133,10 +137,13 @@ func (a *App) instanceSet() logs.Instances {
 	return in
 }
 
-// Run es el bucle principal: sube cada batchEvery y revisa el addon y la app cada 6 horas.
+// Run es el bucle principal: sube cada batchEvery, corre los relevamientos cuando les toca,
+// consulta el manifiesto de relevamientos cada pollSeconds y revisa el addon y la app cada 6 horas.
 func (a *App) Run(ctx context.Context) {
 	a.log("info", "Rebirth Track Uploader %s iniciado", a.Version)
+	a.loadScans()
 	a.refreshConfig()
+	a.SyncScans()
 	a.CheckAddon(false)
 	go a.CheckApp(false)
 	tick := time.NewTicker(10 * time.Second)
@@ -148,8 +155,15 @@ func (a *App) Run(ctx context.Context) {
 			a.Cycle() // último lote antes de cerrar
 			return
 		case <-a.wake:
+			a.RunScans(true)
 			a.Cycle()
 		case <-tick.C:
+			if a.scansDue() {
+				a.SyncScans()
+			}
+			if a.anyScanDue() {
+				a.RunScans(false)
+			}
 			if time.Since(a.lastRun) >= a.batchEvery() {
 				a.Cycle()
 			}
@@ -198,7 +212,8 @@ func (a *App) Installs() (string, []wow.Install) {
 	return wow.Detect(a.Store.Read().WowRoot)
 }
 
-// Cycle lee lo nuevo de cada log y sube los tramos de banda.
+// Cycle lee lo nuevo de cada log y sube los tramos de banda (los archivos de los relevamientos van
+// aparte: RunScans).
 func (a *App) Cycle() {
 	a.mu.Lock()
 	if a.running {
@@ -228,9 +243,6 @@ func (a *App) Cycle() {
 		if s.Disabled[in.Flavor] {
 			continue
 		}
-		a.sendLinks(in)
-		a.sendGroups(in)
-		a.sendGuild(in)
 		files, err := logs.List(in.LogsDir())
 		if err != nil {
 			continue // sin carpeta Logs todavía
@@ -568,6 +580,7 @@ type Status struct {
 	AppUpdate AppUpdate       `json:"appUpdate"`
 	Every     int             `json:"uploadEverySeconds"` // elegido (0 = el del sitio)
 	EveryNow  int             `json:"uploadEveryEffective"`
+	Scans     ScansStatus     `json:"scans"`
 }
 
 func (a *App) Status() Status {
@@ -577,7 +590,7 @@ func (a *App) Status() Status {
 		Version: a.Version, SiteURL: a.BaseURL, Consent: s.ConsentAt != nil, Linked: s.Token != "",
 		UserName: s.UserName, Device: s.DeviceName, Paused: s.Paused, AddonAuto: s.AddonAuto, WowRoot: root,
 		Autostart: AutostartEnabled(), Packaged: Packaged(), AppUpdate: a.appUpdateStatus(s),
-		Every: s.Every, EveryNow: int(a.batchEvery() / time.Second),
+		Every: s.Every, EveryNow: int(a.batchEvery() / time.Second), Scans: a.ScansStatus(),
 	}
 	if s.WowRoot != "" {
 		st.WowRoot = s.WowRoot
@@ -615,120 +628,4 @@ func (a *App) batchEveryLocked() time.Duration {
 		return time.Duration(a.cfg.BatchSeconds) * time.Second
 	}
 	return 3 * time.Minute
-}
-
-// sendGroups manda al sitio los grupos de banda nuevos que anotó el addon. Lo enviado se recuerda
-// mientras siga en el archivo (el addon guarda los últimos 300), así la lista no crece sin fin.
-func (a *App) sendGroups(in wow.Install) {
-	snaps := in.GroupSnapshots()
-	if len(snaps) == 0 {
-		return
-	}
-	sent := a.Store.Read().GroupsSent
-	var pending []wow.GroupSnapshot
-	for _, s := range snaps {
-		if !sent[s.Raw] {
-			pending = append(pending, s)
-		}
-	}
-	if len(pending) == 0 {
-		return
-	}
-	if _, err := a.client().SendGroups(pending); err != nil {
-		if !errors.Is(err, api.ErrUnauthorized) {
-			a.log("error", "No pude subir los grupos de banda: %v", err)
-		}
-		return
-	}
-	a.Store.Update(func(st *state.State) {
-		keep := map[string]bool{}
-		for _, s := range snaps {
-			if st.GroupsSent[s.Raw] {
-				keep[s.Raw] = true
-			}
-		}
-		for _, s := range pending {
-			keep[s.Raw] = true
-		}
-		st.GroupsSent = keep
-	})
-}
-
-// sendGuild manda al sitio la guild que anotó el addon (miembros y personajes anunciados por el
-// canal de la guild) cuando cambió. Se recuerda solo el último contenido enviado de cada cuenta.
-func (a *App) sendGuild(in wow.Install) {
-	guilds := in.Guilds()
-	if len(guilds) == 0 {
-		return
-	}
-	sent := a.Store.Read().GuildSent
-	c := a.client()
-	var done []string
-	for _, g := range guilds {
-		key := in.Flavor + ":" + g.Hash
-		if sent[key] {
-			done = append(done, key)
-			continue
-		}
-		res, code, err := c.SendGuild(in.Flavor, g)
-		if errors.Is(err, api.ErrUnauthorized) {
-			return
-		}
-		if err != nil {
-			a.log("error", "No pude subir la guild %s: %v", g.Name, err)
-			if code < 400 || code >= 500 {
-				continue // se reintenta en la próxima pasada
-			}
-		} else {
-			a.log("info", "Guild %s: %d miembros y %d personajes anunciados subidos al sitio (%s).", g.Name, res.Members, res.Known, in.Label)
-		}
-		done = append(done, key)
-	}
-	a.Store.Update(func(st *state.State) {
-		keep := map[string]bool{}
-		for k := range st.GuildSent {
-			if !strings.HasPrefix(k, in.Flavor+":") {
-				keep[k] = true
-			}
-		}
-		for _, k := range done {
-			keep[k] = true
-		}
-		st.GuildSent = keep
-	})
-}
-
-// sendLinks manda al sitio los personajes que el jugador pidió vincular desde el addon.
-func (a *App) sendLinks(in wow.Install) {
-	reqs := in.LinkRequests()
-	if len(reqs) == 0 {
-		return
-	}
-	sent := a.Store.Read().LinksSent
-	c := a.client()
-	for _, r := range reqs {
-		if sent[r.Raw] {
-			continue
-		}
-		res, code, err := c.LinkCharacter(in.Flavor, r)
-		if errors.Is(err, api.ErrUnauthorized) {
-			return
-		}
-		if err != nil {
-			a.log("error", "No pude vincular %s-%s: %v", r.Name, r.Realm, err)
-			// Un error definitivo del sitio (4xx: ej. ya es de otra persona) no se reintenta.
-			if code < 400 || code >= 500 {
-				continue
-			}
-		} else {
-			a.log("info", "Personaje %s-%s vinculado a tu cuenta (%s).", res.Name, res.Realm, in.Label)
-		}
-		raw := r.Raw
-		a.Store.Update(func(s *state.State) {
-			if s.LinksSent == nil {
-				s.LinksSent = map[string]bool{}
-			}
-			s.LinksSent[raw] = true
-		})
-	}
 }

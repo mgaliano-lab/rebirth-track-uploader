@@ -40,8 +40,11 @@ func main() {
 	headless := flag.Bool("headless", false, "sin ícono en la bandeja (pruebas)")
 	site := flag.String("site", envOr("REBIRTH_TRACK_SITE", "https://rebirthknights.fun"), "URL de Rebirth Track")
 	dir := flag.String("state-dir", "", "carpeta de datos (por defecto, la de configuración del usuario)")
+	scansKey := flag.String("scans-pubkey", os.Getenv("REBIRTH_TRACK_SCANS_PUBKEY"), "clave pública extra (Ed25519, base64) para el manifiesto de relevamientos: pruebas contra un sitio local")
+	panelPort := flag.Int("panel-port", ui.Port, "puerto del panel local (solo pruebas)")
 	afterUpdate := flag.Bool("after-update", false, "la lanzó la versión anterior al actualizarse: esperar a que libere el panel")
 	flag.Parse()
+	ui.Port = *panelPort
 	app.CleanupUpdate()
 
 	stateDir := *dir
@@ -61,6 +64,9 @@ func main() {
 	}
 
 	a := app.New(version, *site, st, openURL)
+	if *scansKey != "" {
+		a.ExtraScanKeys = []string{*scansKey}
+	}
 	srv, err := ui.Listen(a, stateDir)
 	for i := 0; *afterUpdate && errors.Is(err, ui.ErrRunning) && i < 40; i++ {
 		time.Sleep(500 * time.Millisecond) // la versión vieja todavía está cerrando
