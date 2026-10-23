@@ -204,6 +204,9 @@ func (s *Server) Serve() error {
 		if v, ok := b["addonAutoUpdate"].(bool); ok {
 			a.SetAddonAuto(v)
 		}
+		if v, ok := b["sendBalance"].(bool); ok {
+			a.SetSendBalance(v)
+		}
 		if v, ok := b["uploadEverySeconds"].(float64); ok {
 			if err := a.SetEvery(int(v)); err != nil {
 				return nil, err

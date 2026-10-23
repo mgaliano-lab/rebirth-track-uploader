@@ -26,18 +26,21 @@ type FileProgress struct {
 }
 
 type State struct {
-	ConsentAt  *time.Time               `json:"consentAt,omitempty"`
-	Token      string                   `json:"-"`               // en memoria, en claro
-	TokenEnc   string                   `json:"token,omitempty"` // en disco: cifrado (DPAPI en Windows)
-	UserName   string                   `json:"userName,omitempty"`
-	DeviceName string                   `json:"deviceName,omitempty"`
-	Paused     bool                     `json:"paused"`
-	WowRoot    string                   `json:"wowRoot,omitempty"` // elegido a mano; vacío = detectar
-	Disabled   map[string]bool          `json:"disabledFlavors,omitempty"`
-	AddonAuto  bool                     `json:"addonAutoUpdate"`
-	AppAuto    bool                     `json:"appAutoUpdate"`
-	Every      int                      `json:"uploadEverySeconds,omitempty"` // 0 = lo que diga el sitio (3 min)
-	Files      map[string]*FileProgress `json:"files"`
+	ConsentAt  *time.Time      `json:"consentAt,omitempty"`
+	Token      string          `json:"-"`               // en memoria, en claro
+	TokenEnc   string          `json:"token,omitempty"` // en disco: cifrado (DPAPI en Windows)
+	UserName   string          `json:"userName,omitempty"`
+	DeviceName string          `json:"deviceName,omitempty"`
+	Paused     bool            `json:"paused"`
+	WowRoot    string          `json:"wowRoot,omitempty"` // elegido a mano; vacío = detectar
+	Disabled   map[string]bool `json:"disabledFlavors,omitempty"`
+	AddonAuto  bool            `json:"addonAutoUpdate"`
+	AppAuto    bool            `json:"appAutoUpdate"`
+	Every      int             `json:"uploadEverySeconds,omitempty"` // 0 = lo que diga el sitio (3 min)
+	// Casilla «Enviar mi balance» desactivada: el addon no anota el balance de tus personajes y la
+	// app lo saca de los archivos antes de subirlos (el del banco de la guild se sigue mandando).
+	NoBalance bool                     `json:"noBalance,omitempty"`
+	Files     map[string]*FileProgress `json:"files"`
 	// Relevamientos: SHA-256 de lo último subido (o rechazado por el sitio) de cada archivo, por
 	// "versión|relevamiento|ruta". Un archivo se vuelve a subir solo si cambió.
 	ScansSent map[string]string `json:"scansSent,omitempty"`

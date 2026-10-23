@@ -32,6 +32,7 @@ type fakeSite struct {
 	gets     int
 	notMod   int
 	uploads  []string // "flavor|scan|ruta|contenido"
+	balance  []string // X-Balance de cada subida
 	reject   bool
 }
 
@@ -77,6 +78,7 @@ func (f *fakeSite) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.uploads = append(f.uploads, fmt.Sprintf("%s|%s|%s|%s", r.Header.Get("X-Flavor"), r.Header.Get("X-Scan-Id"), p, b))
+		f.balance = append(f.balance, r.Header.Get("X-Balance"))
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(`{"ok":true,"messages":["Personaje Roguebash-Nightslayer vinculado a tu cuenta."]}`))
 	default:
@@ -259,5 +261,54 @@ func TestDefinitive(t *testing.T) {
 		if definitive(code) != want {
 			t.Errorf("%d: %v", code, !want)
 		}
+	}
+}
+
+// «Enviar mi balance»: la app le avisa al addon (AppSettings.lua) y, desactivada, saca el balance de
+// los personajes del archivo antes de subirlo (el del banco de la guild queda).
+func TestSendBalance(t *testing.T) {
+	a, site, sv, done := newScanApp(t)
+	defer done()
+	addonDir := filepath.Join(a.Store.Read().WowRoot, "_anniversary_", "Interface", "AddOns", "RebirthTrack")
+	os.MkdirAll(addonDir, 0o755)
+	db := "RebirthTrackDB = {\n\t[\"data\"] = {\n\t\t[\"Player-1-A\"] = {\n\t\t\t[\"mo1\"] = \"mo1;Player-1-A;1792530000;5000000\",\n" +
+		"\t\t\t[\"p1\"] = \"p1;Player-1-A;1792530000;Roguebash\",\n\t\t},\n\t\t[\"guild:RK\"] = {\n\t\t\t[\"gbm1\"] = \"gbm1;guild:RK;1792530000;777\",\n\t\t},\n\t},\n}\n"
+	os.WriteFile(filepath.Join(sv, "RebirthTrack.lua"), []byte(db), 0o644)
+	a.SyncScans()
+	settings := func() string { b, _ := os.ReadFile(filepath.Join(addonDir, "AppSettings.lua")); return string(b) }
+
+	a.RunScans(true)
+	got := site.took()
+	if len(got) != 1 || !strings.Contains(got[0], "mo1;Player-1-A") || site.balance[0] != "on" {
+		t.Fatalf("activada se manda tal cual: %v %v", got, site.balance)
+	}
+	if !strings.Contains(settings(), "RebirthTrackApp = { balance = true }") {
+		t.Fatalf("el addon tiene que saber que está activada: %q", settings())
+	}
+
+	a.SetSendBalance(false) // vuelve a subir en segundo plano: el contenido cambió
+	deadline := time.Now().Add(3 * time.Second)
+	for got = site.took(); len(got) == 0; got = site.took() {
+		if time.Now().After(deadline) {
+			t.Fatal("no volvió a subir el archivo")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if strings.Contains(got[0], "mo1") || !strings.Contains(got[0], "gbm1;guild:RK;1792530000;777") || !strings.Contains(got[0], "p1;Player-1-A") {
+		t.Fatalf("desactivada no manda el balance propio y sí el resto: %s", got[0])
+	}
+	site.mu.Lock()
+	last := site.balance[len(site.balance)-1]
+	site.mu.Unlock()
+	if last != "off" || !strings.Contains(settings(), "balance = false") || a.Status().Balance {
+		t.Fatalf("header %q, opciones %q", last, settings())
+	}
+}
+
+func TestStripBalance(t *testing.T) {
+	in := "a\n\t\t\t[\"mo1\"] = \"@Healz;mo1;Player-1-B;1792530000;1\",\n\t\t\t[\"gbm1\"] = \"gbm1;guild:RK;1;2\",\n\"mo1;Player-1-A;1;3\""
+	want := "a\n\t\t\t[\"gbm1\"] = \"gbm1;guild:RK;1;2\",\n"
+	if got := string(StripBalance([]byte(in))); got != want {
+		t.Fatalf("%q", got)
 	}
 }
