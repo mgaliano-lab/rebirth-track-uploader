@@ -1,12 +1,10 @@
 # Anuncia en el canal de novedades de Discord la versión de la app que está publicada en la
-# Microsoft Store. El job «store» de build.yml solo la manda a certificación y Microsoft la publica
-# horas o días después: esto mira cada 30 minutos qué versión hay en la Store (catálogo público) y,
-# si es nueva y está en CHANGELOG.md, la anuncia. El sitio no repite un anuncio ya hecho.
+# Microsoft Store. Lo hace solo el sitio cada 30 minutos (server/plugins/store-announce.ts de
+# rebirth-track): el cron de GitHub corría muy de vez en cuando. Esto queda para dispararlo a mano.
+# El sitio no repite un anuncio ya hecho.
 name: store-announce
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 permissions:
