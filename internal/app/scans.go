@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -262,6 +263,7 @@ func (a *App) RunScans(force bool) {
 			if s.Disabled[in.Flavor] || !scan.AppliesTo(in.Flavor) {
 				continue
 			}
+			a.writeAddonSettings(in)
 			if err := a.scanInstall(c, m.Version, scan, in); errors.Is(err, api.ErrUnauthorized) {
 				a.unlinked()
 				return
@@ -296,6 +298,10 @@ func (a *App) scanInstall(c *api.Client, version int, scan scans.Scan, in wow.In
 				a.setScanFile(key, f)
 				continue
 			}
+			noBalance := a.Store.Read().NoBalance
+			if noBalance {
+				data = StripBalance(data)
+			}
 			sum := sha256.Sum256(data)
 			sha := hex.EncodeToString(sum[:])
 			if a.Store.Read().ScansSent[key] == sha {
@@ -304,7 +310,7 @@ func (a *App) scanInstall(c *api.Client, version int, scan scans.Scan, in wow.In
 				a.setScanFile(key, f)
 				continue
 			}
-			res, code, err := c.SendFile(api.UploadFile{Endpoint: scan.Upload, ScanID: scan.ID, Flavor: in.Flavor, Path: m.Rel, SHA256: sha, ModTime: m.ModTime, ManifestVersion: version, Data: data})
+			res, code, err := c.SendFile(api.UploadFile{Endpoint: scan.Upload, ScanID: scan.ID, Flavor: in.Flavor, Path: m.Rel, SHA256: sha, ModTime: m.ModTime, ManifestVersion: version, Data: data, Balance: !noBalance})
 			if errors.Is(err, api.ErrUnauthorized) {
 				return err
 			}
@@ -411,5 +417,51 @@ func (a *App) ScansStatus() ScansStatus {
 // CheckScansNow: botón «Buscar cambios» del panel.
 func (a *App) CheckScansNow() {
 	a.SyncScans()
+	go a.RunScans(true)
+}
+
+// Balance de cada personaje que anota el addon (líneas «mo1;…» de RebirthTrack.lua, ver Collect.lua):
+// con «Enviar mi balance» desactivada no sale de la PC aunque el juego todavía no haya recargado el
+// addon con la opción nueva. El balance del banco de la guild («gbm1») no se toca.
+var balanceLine = regexp.MustCompile(`(?m)^[^\n]*"(?:@[^;"\n]*;)?mo1;[^\n]*(?:\n|$)`)
+
+func StripBalance(data []byte) []byte { return balanceLine.ReplaceAll(data, nil) }
+
+// AppSettings.lua, en la carpeta del addon: las opciones del panel que el addon tiene que saber (lo
+// lee al cargar). Sin este archivo (sin la app) el addon no anota el balance de los personajes.
+const addonSettingsFile = "AppSettings.lua"
+
+func addonSettings(balance bool) []byte {
+	return []byte(fmt.Sprintf("-- Lo escribe Rebirth Track Uploader según su panel (no lo edites: la app lo vuelve a escribir).\nRebirthTrackApp = { balance = %t }\n", balance))
+}
+
+// writeAddonSettings lo deja al día en una versión de WoW, si el addon está instalado.
+func (a *App) writeAddonSettings(in wow.Install) {
+	dir := filepath.Join(in.AddOnsDir(), "RebirthTrack")
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		return
+	}
+	want := addonSettings(!a.Store.Read().NoBalance)
+	p := filepath.Join(dir, addonSettingsFile)
+	if cur, err := os.ReadFile(p); err == nil && string(cur) == string(want) {
+		return
+	}
+	if err := os.WriteFile(p, want, 0o644); err != nil {
+		a.log("error", "No pude guardar las opciones del addon en %s: %v", in.Label, err)
+	}
+}
+
+// SetSendBalance: casilla «Enviar mi balance» del panel.
+func (a *App) SetSendBalance(v bool) {
+	a.Store.Update(func(s *state.State) { s.NoBalance = !v })
+	_, installs := a.Installs()
+	for _, in := range installs {
+		a.writeAddonSettings(in)
+	}
+	if v {
+		a.log("info", "Enviar mi balance: activado. El addon lo anota desde la próxima vez que entres al juego (o con /reload).")
+	} else {
+		a.log("info", "Enviar mi balance: desactivado. La app deja de mandarlo, el sitio borra el que tenía y el addon deja de anotarlo al recargar.")
+	}
 	go a.RunScans(true)
 }

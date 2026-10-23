@@ -12,6 +12,17 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.5.0] - 2026-10-23
+
+### Para todos
+
+- **Enviar mi balance**: casilla nueva en «Qué se releva». Activada, el addon anota el balance de tus personajes y la app lo sube; si la desactivás, el addon deja de anotarlo, la app no lo manda y el sitio borra el que tenía. El balance del banco de la guild se manda igual.
+
+### Técnico
+
+- `state.NoBalance` (casilla desactivada). La app escribe `Interface/AddOns/RebirthTrack/AppSettings.lua` (`RebirthTrackApp = { balance = … }`) en cada versión con el addon instalado: al cambiar la casilla, al instalar el addon y en cada pasada de relevamientos si cambió. El addon (v0.3.1) solo anota `mo1` con `balance = true`.
+- Con la casilla desactivada, `StripBalance` saca las líneas `mo1` del archivo antes de subirlo (por si el juego todavía no recargó el addon), y cada subida manda `X-Balance: on|off`; el sitio (v0.5.1) solo acepta el balance con `on`.
+
 ## [0.4.0] - 2026-10-22
 
 ### Para todos
