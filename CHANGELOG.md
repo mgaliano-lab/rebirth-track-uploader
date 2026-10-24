@@ -12,6 +12,16 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.5.1] - 2026-10-24
+
+### Para todos
+
+- **Sin casilla «Enviar mi balance»**: el addon ya no anota el balance, las bolsas ni el banco de nadie (de oro e inventario, solo los de la guild), así que la casilla no hace falta.
+
+### Técnico
+
+- Fuera `state.NoBalance`, `StripBalance`, `X-Balance` y la escritura de `AppSettings.lua`; la pasada de relevamientos borra el `AppSettings.lua` que dejó la v0.5.0 en la carpeta del addon (el addon 0.3.2 ya no lo carga).
+
 ## [0.5.0] - 2026-10-23
 
 ### Para todos

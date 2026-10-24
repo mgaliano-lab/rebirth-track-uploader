@@ -543,7 +543,7 @@ func (a *App) CheckAddon(force bool) {
 			a.log("error", "No pude instalar el addon en %s: %v", in.Label, err)
 			continue
 		}
-		a.writeAddonSettings(in)
+		a.removeOldAddonSettings(in)
 		a.log("info", "Addon Rebirth Track v%s instalado en %s (recargá la interfaz con /reload si el juego está abierto).", rel.Version, in.Label)
 	}
 }
@@ -582,7 +582,6 @@ type Status struct {
 	Every     int             `json:"uploadEverySeconds"` // elegido (0 = el del sitio)
 	EveryNow  int             `json:"uploadEveryEffective"`
 	Scans     ScansStatus     `json:"scans"`
-	Balance   bool            `json:"sendBalance"`
 }
 
 func (a *App) Status() Status {
@@ -592,7 +591,7 @@ func (a *App) Status() Status {
 		Version: a.Version, SiteURL: a.BaseURL, Consent: s.ConsentAt != nil, Linked: s.Token != "",
 		UserName: s.UserName, Device: s.DeviceName, Paused: s.Paused, AddonAuto: s.AddonAuto, WowRoot: root,
 		Autostart: AutostartEnabled(), Packaged: Packaged(), AppUpdate: a.appUpdateStatus(s),
-		Every: s.Every, EveryNow: int(a.batchEvery() / time.Second), Scans: a.ScansStatus(), Balance: !s.NoBalance,
+		Every: s.Every, EveryNow: int(a.batchEvery() / time.Second), Scans: a.ScansStatus(),
 	}
 	if s.WowRoot != "" {
 		st.WowRoot = s.WowRoot
