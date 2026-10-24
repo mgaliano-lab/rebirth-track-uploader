@@ -124,7 +124,6 @@
           <li>Solo los tramos del registro de combate <b>dentro de bandas y mazmorras</b>: daño, curas, buffs y debuffs, muertes, posiciones y nombres de los participantes, tal como los escribe el juego.</li>
           <li>En lotes cada <span id="everyTxt">3 minutos</span> (lo elegís abajo), comprimidos, a tu nombre (tu cuenta de Discord en Rebirth Track).</li>
           <li>Los archivos de <b>Qué se releva</b> cuando cambian, comprimidos (por ejemplo, la guild y los pedidos de vincular que anota el addon).</li>
-          <li>Tu balance (el oro de tus personajes), solo con la casilla <b>Enviar mi balance</b> activada.</li>
           <li><b>Nunca</b>: mundo abierto, JcJ, chat, tu cuenta o contraseña de Battle.net, capturas de pantalla, teclas ni ningún otro archivo de tu PC fuera de los de <b>Qué se releva</b>.</li>
         </ul>
       </div>
@@ -138,10 +137,6 @@
     <p class="dim small">Además de los registros de combate, la app sube estos archivos de la carpeta de cada versión de WoW, cuando cambian. La lista la publica rebirthknights.fun firmada digitalmente y la app la toma sola, sin actualizarse: es solo una lista de archivos, la app nunca ejecuta nada que baje. Rechaza rutas fuera de la carpeta de WoW y cualquier archivo que no sea <code>.lua</code> o <code>.txt</code>.</p>
     <div class="row small"><span class="grow" id="scansInfo"></span><button class="ghost" id="scansCheck">Buscar cambios</button></div>
     <p class="err small" id="scansErr" hidden></p>
-    <div class="small" style="margin-top:8px">
-      <label><input type="checkbox" id="sendBalance" /> Enviar mi balance</label>
-      <p class="dim small" style="margin:4px 0 0">El balance de tus personajes. Si lo desactivás, el addon deja de anotarlo, la app no lo manda y el sitio borra el que tenía. El balance del banco de la guild se manda igual.</p>
-    </div>
     <ul class="clean scans" id="scansList" style="margin-top:10px"></ul>
   </section>
   </div>
@@ -326,7 +321,6 @@ function render(s) {
       <span class="small dim">${i.logs} registro(s)${i.lastLog ? ' · último ' + esc(i.lastLog) : ''}</span>
     </li>`).join('') : '<li class="dim">No encontré World of Warcraft. Indicá la carpeta arriba (la que contiene _retail_, _classic_era_, la de WoW Forever, etc.).</li>'
   $('addonAuto').checked = s.addonAutoUpdate
-  $('sendBalance').checked = s.sendBalance
   $('autostart').checked = s.autostart
   $('autostartRow').hidden = s.packaged
   $('autostartStore').hidden = !s.packaged
@@ -408,7 +402,6 @@ $('now').onclick = act(() => call('/api/upload-now', {}))
 $('addonNow').onclick = act(() => call('/api/addon/install', {}))
 $('scansCheck').onclick = act(() => call('/api/scans/check', {}))
 $('addonAuto').onchange = act(() => call('/api/settings', { addonAutoUpdate: $('addonAuto').checked }))
-$('sendBalance').onchange = act(() => call('/api/settings', { sendBalance: $('sendBalance').checked }))
 async function saveEvery(seconds) {
   $('everyErr').hidden = true
   try { render(await call('/api/settings', { uploadEverySeconds: seconds })); everyEditing = false }

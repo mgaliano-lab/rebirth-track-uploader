@@ -231,7 +231,6 @@ type UploadFile struct {
 	ModTime         time.Time
 	ManifestVersion int
 	Data            []byte
-	Balance         bool // «Enviar mi balance» (si está en false el sitio borra el que tenga de esta cuenta)
 }
 
 // SendFile comprime y sube un archivo de un relevamiento. Devuelve el código HTTP para distinguir
@@ -250,7 +249,6 @@ func (c *Client) SendFile(f UploadFile) (FileResult, int, error) {
 		"X-Sha256":           f.SHA256,
 		"X-Modified-At":      strconv.FormatInt(f.ModTime.Unix(), 10),
 		"X-Manifest-Version": strconv.Itoa(f.ManifestVersion),
-		"X-Balance":          map[bool]string{true: "on", false: "off"}[f.Balance],
 	}, &res)
 	res.Sent = gz.Len()
 	return res, code, err
