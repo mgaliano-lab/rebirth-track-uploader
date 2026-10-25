@@ -51,9 +51,26 @@ var (
 	pSetWindowPos    = user32.NewProc("SetWindowPos")
 	pIsIconic        = user32.NewProc("IsIconic")
 	pMonitorFromRect = user32.NewProc("MonitorFromRect")
+	pMonitorFromWin  = user32.NewProc("MonitorFromWindow")
+	pGetMonitorInfoW = user32.NewProc("GetMonitorInfoW")
 )
 
 type rect struct{ Left, Top, Right, Bottom int32 }
+
+type monitorInfo struct {
+	Size          uint32
+	Monitor, Work rect
+	Flags         uint32
+}
+
+// Tamaño de la primera apertura: el ancho de siempre y el alto de la vista más larga (la de la
+// primera vez: qué hace, qué se releva y la actividad), achicados a lo que entre en la pantalla.
+// La app no declara DPI, así que son unidades lógicas (Windows escala la ventana entera).
+const (
+	firstWidth, firstHeight = 1120, 1280
+	minWidth, minHeight     = 900, 620
+	screenMargin            = 24
+)
 
 type Window struct {
 	dataDir  string
@@ -107,7 +124,7 @@ func (w *Window) run(url string) {
 	wv := webview2.NewWithOptions(webview2.WebViewOptions{
 		DataPath:      filepath.Join(w.dataDir, "webview2"),
 		AutoFocus:     true,
-		WindowOptions: webview2.WindowOptions{Title: title, Width: 1120, Height: 780, Center: true},
+		WindowOptions: webview2.WindowOptions{Title: title, Width: 1120, Height: 780}, // se acomoda en placeWindow
 	})
 	if wv == nil {
 		log.Println("ventana: WebView2 no disponible; el panel se abre en el navegador")
@@ -118,9 +135,8 @@ func (w *Window) run(url string) {
 		return
 	}
 	hwnd := uintptr(wv.Window())
-	wv.SetSize(900, 620, webview2.HintMin)
 	w.setIcon(hwnd)
-	w.restoreBounds(hwnd)
+	w.placeWindow(wv, hwnd)
 	if err := wv.Bind("rtOpenExternal", func(u string) { w.external(u) }); err != nil {
 		log.Println("ventana:", err)
 	}
@@ -158,19 +174,63 @@ func (w *Window) setIcon(hwnd uintptr) {
 // Tamaño y posición: se recuerdan entre aperturas (si todavía caen en algún monitor).
 func (w *Window) boundsFile() string { return filepath.Join(w.dataDir, "window.json") }
 
-func (w *Window) restoreBounds(hwnd uintptr) {
-	b, err := os.ReadFile(w.boundsFile())
-	if err != nil {
-		return
+// placeWindow: la posición guardada si todavía cae en algún monitor (achicada a su área útil si no
+// entra); si no hay, la primera vez: centrada en el área útil (sin la barra de tareas) con el
+// tamaño que pide la vista, o el que entre en pantallas chicas o con escala alta (ej. 1080p al
+// 150 %: unos 1280×680 útiles).
+func (w *Window) placeWindow(wv webview2.WebView, hwnd uintptr) {
+	r, saved := w.savedBounds()
+	var work rect
+	if saved {
+		m, _, _ := pMonitorFromRect.Call(uintptr(unsafe.Pointer(&r)), 0) // MONITOR_DEFAULTTONULL
+		saved = m != 0 && monitorWork(m, &work)
 	}
-	var r rect
-	if json.Unmarshal(b, &r) != nil || r.Right-r.Left < 600 || r.Bottom-r.Top < 400 {
-		return
+	if !saved {
+		m, _, _ := pMonitorFromWin.Call(hwnd, 2) // MONITOR_DEFAULTTONEAREST
+		if !monitorWork(m, &work) {
+			wv.SetSize(minWidth, minHeight, webview2.HintMin)
+			return
+		}
+		width := min(firstWidth, work.Right-work.Left-2*screenMargin)
+		height := min(firstHeight, work.Bottom-work.Top-2*screenMargin)
+		r.Left = work.Left + (work.Right-work.Left-width)/2
+		r.Top = work.Top + (work.Bottom-work.Top-height)/2
+		r.Right, r.Bottom = r.Left+width, r.Top+height
 	}
-	if m, _, _ := pMonitorFromRect.Call(uintptr(unsafe.Pointer(&r)), 0); m == 0 { // MONITOR_DEFAULTTONULL
-		return
+	// Ni la guardada ni el mínimo pueden pasarse del área útil.
+	r.Right = min(r.Right, r.Left+work.Right-work.Left)
+	r.Bottom = min(r.Bottom, r.Top+work.Bottom-work.Top)
+	if r.Right > work.Right {
+		r.Left, r.Right = work.Right-(r.Right-r.Left), work.Right
 	}
+	if r.Bottom > work.Bottom {
+		r.Top, r.Bottom = work.Bottom-(r.Bottom-r.Top), work.Bottom
+	}
+	r.Left, r.Top = max(r.Left, work.Left), max(r.Top, work.Top)
+	wv.SetSize(int(min(minWidth, work.Right-work.Left)), int(min(minHeight, work.Bottom-work.Top)), webview2.HintMin)
 	pSetWindowPos.Call(hwnd, 0, uintptr(r.Left), uintptr(r.Top), uintptr(r.Right-r.Left), uintptr(r.Bottom-r.Top), 0x4|0x10) // SWP_NOZORDER|SWP_NOACTIVATE
+}
+
+func (w *Window) savedBounds() (rect, bool) {
+	var r rect
+	b, err := os.ReadFile(w.boundsFile())
+	if err != nil || json.Unmarshal(b, &r) != nil || r.Right-r.Left < 600 || r.Bottom-r.Top < 400 {
+		return rect{}, false
+	}
+	return r, true
+}
+
+// monitorWork: el área útil del monitor (sin la barra de tareas).
+func monitorWork(m uintptr, work *rect) bool {
+	if m == 0 {
+		return false
+	}
+	mi := monitorInfo{Size: uint32(unsafe.Sizeof(monitorInfo{}))}
+	if ok, _, _ := pGetMonitorInfoW.Call(m, uintptr(unsafe.Pointer(&mi))); ok == 0 {
+		return false
+	}
+	*work = mi.Work
+	return true
 }
 
 func (w *Window) trackBounds(hwnd uintptr, stop chan struct{}) {
