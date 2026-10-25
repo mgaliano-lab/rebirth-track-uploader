@@ -88,6 +88,7 @@ func main() {
 		showPanel = func() { openURL(srv.URL()) }
 	}
 	srv.OnShow = showPanel
+	a.OnUnlinked = showPanel // que se vea en el acto que la desvincularon desde la web
 	// Si el panel estaba abierto al actualizarse, la versión nueva lo vuelve a abrir.
 	reopen := filepath.Join(stateDir, "reopen-panel")
 	a.BeforeUpdate = func() {

@@ -2,8 +2,10 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,11 +13,15 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var ErrUnauthorized = errors.New("la PC no está vinculada (o la desvincularon desde la web)")
 var ErrPending = errors.New("pendiente")
+
+// ErrNoEvents: el sitio todavía no tiene el stream de avisos (versión vieja).
+var ErrNoEvents = errors.New("el sitio no tiene el stream de avisos")
 
 // ErrSessionGone: la sesión ya no existe en el sitio (la borraron desde la web).
 var ErrSessionGone = errors.New("la sesión ya no existe en el sitio")
@@ -107,6 +113,48 @@ func (c *Client) PollLink(deviceCode string) (LinkResult, error) {
 		return out, ErrPending
 	}
 	return out, err
+}
+
+// Events abre el stream de avisos del sitio (SSE) y llama a onEvent con el nombre de cada uno
+// ("revoked": la desvincularon desde la web) hasta que se corte, se cancele ctx o pase `idle` sin
+// recibir nada (el sitio manda un ping cada 25 s: si no llega, la conexión quedó colgada).
+func (c *Client) Events(ctx context.Context, idle time.Duration, onEvent func(name string)) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", c.BaseURL+"/api/uploader/events", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "RebirthTrackUploader/"+c.AppVersion)
+	req.Header.Set("X-App-Version", c.AppVersion)
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Accept", "text/event-stream")
+	res, err := (&http.Client{}).Do(req) // sin Timeout: el stream queda abierto
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	switch {
+	case res.StatusCode == http.StatusUnauthorized:
+		return ErrUnauthorized
+	case res.StatusCode == http.StatusNotFound:
+		return ErrNoEvents
+	case res.StatusCode >= 400:
+		return fmt.Errorf("%s", res.Status)
+	}
+	watchdog := time.AfterFunc(idle, cancel)
+	defer watchdog.Stop()
+	sc := bufio.NewScanner(res.Body)
+	for sc.Scan() {
+		watchdog.Reset(idle)
+		if name, ok := strings.CutPrefix(sc.Text(), "event:"); ok {
+			onEvent(strings.TrimSpace(name))
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return err
+	}
+	return io.EOF
 }
 
 type Config struct {

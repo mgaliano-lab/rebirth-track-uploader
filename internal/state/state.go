@@ -31,6 +31,7 @@ type State struct {
 	TokenEnc   string                   `json:"token,omitempty"` // en disco: cifrado (DPAPI en Windows)
 	UserName   string                   `json:"userName,omitempty"`
 	DeviceName string                   `json:"deviceName,omitempty"`
+	UnlinkedAt *time.Time               `json:"unlinkedAt,omitempty"` // la desvincularon desde la web (el panel lo avisa)
 	Paused     bool                     `json:"paused"`
 	WowRoot    string                   `json:"wowRoot,omitempty"` // elegido a mano; vacío = detectar
 	Disabled   map[string]bool          `json:"disabledFlavors,omitempty"`
