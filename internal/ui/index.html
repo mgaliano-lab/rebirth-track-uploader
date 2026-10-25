@@ -40,6 +40,7 @@
   input[type=text] { background:#000; color:var(--text); border:1px solid var(--border); border-radius:5px; padding:7px 10px; min-width:0; }
   label { display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
   .err { color:var(--bad); }
+  .warnNote { color:var(--warn); border:1px solid var(--warn); border-radius:6px; padding:8px 12px; }
   .old li { display:grid; grid-template-columns:auto 1fr auto; gap:4px 10px; align-items:start; padding:8px; border-radius:5px; background:rgba(0,0,0,.25); }
   .old li.off { opacity:.55; }
   .old .zones { grid-column:2 / 4; font-size:.85rem; }
@@ -149,6 +150,7 @@
       <button class="danger" id="unlink">Desvincular</button>
     </div>
     <div id="unlinked" hidden>
+      <p id="unlinkedNote" class="warnNote" hidden></p>
       <p>Vinculá esta PC con tu cuenta de Rebirth Track (Discord) para que lo que subas quede a tu nombre.</p>
       <div class="row" id="linkStart"><button id="link">Vincular con Discord</button></div>
       <div id="linkCode" hidden>
@@ -276,7 +278,7 @@ function render(s) {
   $('privacy').href = s.siteUrl + '/privacidad'
   const pill = $('pill')
   if (!s.consent) { pill.textContent = 'Esperando tu aceptación'; pill.className = 'pill warn' }
-  else if (!s.linked) { pill.textContent = 'Sin vincular'; pill.className = 'pill warn' }
+  else if (!s.linked) { pill.textContent = s.unlinkedAt ? 'Desvinculada' : 'Sin vincular'; pill.className = 'pill warn' }
   else if (s.paused) { pill.textContent = 'En pausa'; pill.className = 'pill warn' }
   else { pill.textContent = 'Activa'; pill.className = 'pill ok' }
   $('consentRow').hidden = s.consent
@@ -294,7 +296,7 @@ function render(s) {
       ? ((s.installs || []).length
         ? 'Activá al menos una versión de WoW para continuar.'
         : 'Elegí la carpeta <b>World of Warcraft</b> (la que tiene <code>_retail_</code>, <code>_anniversary_</code>…) o tocá <b>Autoubicar</b>.')
-      : step === 3 ? 'Vinculá esta PC con tu cuenta de Rebirth Track (Discord).' : ''
+      : step === 3 ? (s.unlinkedAt ? 'Esta PC se desvinculó desde el sitio: volvé a vincularla para seguir subiendo.' : 'Vinculá esta PC con tu cuenta de Rebirth Track (Discord).') : ''
   $('tabs').hidden = !!step
   $('tools').hidden = !!step
   if (step) { for (const p of document.querySelectorAll('.tab')) p.hidden = p.dataset.pane !== only }
@@ -309,6 +311,8 @@ function render(s) {
   $('importSec').hidden = !(s.consent && s.linked)
   $('linked').hidden = !s.linked
   $('unlinked').hidden = s.linked
+  $('unlinkedNote').hidden = !s.unlinkedAt
+  if (s.unlinkedAt) $('unlinkedNote').textContent = `Esta PC se desvinculó desde el sitio el ${day(s.unlinkedAt)}. No se sube nada hasta que la vuelvas a vincular.`
   $('user').textContent = s.userName; $('device').textContent = s.deviceName
   $('linkCode').hidden = !s.linking; $('linkStart').hidden = !!s.linking
   if (s.linking) { $('code').textContent = s.linking.userCode; $('verify').href = s.linking.verifyUrl }

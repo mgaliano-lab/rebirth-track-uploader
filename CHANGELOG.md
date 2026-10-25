@@ -12,6 +12,17 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.5.2] - 2026-10-25
+
+### Para todos
+
+- **Te enterás al toque si desvinculás la PC desde la web**: la app se abre sola y te avisa que la desvincularon (y cuándo). Si la PC estaba apagada, te avisa apenas arranca.
+
+### Técnico
+
+- La app mantiene abierto el stream de avisos del sitio (`GET /api/uploader/events`, SSE, sitio ≥ 0.8.9) mientras está vinculada: con `revoked` (o un 401 al reconectar) borra el token, guarda `UnlinkedAt` y llama a `OnUnlinked` (abre el panel). Antes solo se enteraba cuando intentaba subir algo y el sitio le contestaba 401. Reconecta sola: 5 s después de un corte, con espera creciente hasta 2 min si falla, 10 min si el sitio no tiene el endpoint; si pasan 90 s sin ping, da la conexión por colgada.
+- Un 401 solo desvincula si sigue siendo el token con el que se preguntó (no el de una vinculación posterior). El panel muestra «Desvinculada» y la fecha hasta que se vuelve a vincular; desvincular a mano no deja el aviso.
+
 ## [0.5.1] - 2026-10-24
 
 ### Para todos

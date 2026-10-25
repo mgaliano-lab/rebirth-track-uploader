@@ -54,22 +54,24 @@ type App struct {
 	// BeforeUpdate corre justo antes de reemplazar la app por la versión nueva (ej. recordar
 	// que el panel estaba abierto, para reabrirlo cuando vuelva).
 	BeforeUpdate func()
-	mu           sync.Mutex
-	activity     []Activity
-	linking      *Linking
-	cfg          *api.Config
-	latest       *addon.Release
-	lastRun      time.Time
-	running      bool
-	uploaded     int64
-	batches      int
-	wake         chan struct{}
-	appLatest    *update.Release
-	updating     bool
-	Quit         func()          // cierra la app (la pone main); se usa al actualizarse
-	imports      map[string]bool // archivos viejos elegidos para importar; se aplican al empezar el ciclo
-	scanCaches   map[string]scanCache
-	scans        scanState
+	// OnUnlinked corre cuando el sitio avisa que desvincularon la PC (ej. mostrar el panel).
+	OnUnlinked func()
+	mu         sync.Mutex
+	activity   []Activity
+	linking    *Linking
+	cfg        *api.Config
+	latest     *addon.Release
+	lastRun    time.Time
+	running    bool
+	uploaded   int64
+	batches    int
+	wake       chan struct{}
+	appLatest  *update.Release
+	updating   bool
+	Quit       func()          // cierra la app (la pone main); se usa al actualizarse
+	imports    map[string]bool // archivos viejos elegidos para importar; se aplican al empezar el ciclo
+	scanCaches map[string]scanCache
+	scans      scanState
 	// ExtraScanKeys: claves públicas adicionales para el manifiesto de relevamientos (pruebas
 	// contra un sitio local con su propia clave; las de producción están en scans.TrustedKeys).
 	ExtraScanKeys []string
@@ -146,6 +148,7 @@ func (a *App) Run(ctx context.Context) {
 	a.SyncScans()
 	a.CheckAddon(false)
 	go a.CheckApp(false)
+	go a.watchLink(ctx)
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()
 	lastAddon := time.Now()
@@ -203,9 +206,75 @@ func (a *App) refreshConfig() {
 	a.Store.Update(func(s *state.State) { s.UserName = cfg.UserName; s.DeviceName = cfg.DeviceName })
 }
 
-func (a *App) unlinked() {
-	a.Store.Update(func(s *state.State) { s.Token = "" })
-	a.log("error", "Esta PC quedó desvinculada de Rebirth Track. Volvé a vincularla para seguir subiendo.")
+func (a *App) unlinked() { a.unlinkedToken(a.Store.Read().Token) }
+
+// unlinkedToken: el sitio dice que el token ya no vale (la desvincularon desde la web). Solo aplica
+// si sigue siendo el token con el que se preguntó, no uno de una vinculación posterior.
+func (a *App) unlinkedToken(token string) {
+	now := time.Now()
+	changed := false
+	a.Store.Update(func(s *state.State) {
+		if s.Token != "" && s.Token == token {
+			s.Token, s.UnlinkedAt, changed = "", &now, true
+		}
+	})
+	if !changed {
+		return
+	}
+	a.log("error", "Esta PC se desvinculó desde Rebirth Track. No se sube nada hasta que la vuelvas a vincular.")
+	if a.OnUnlinked != nil {
+		a.OnUnlinked()
+	}
+}
+
+// watchLink mantiene abierto el stream de avisos del sitio mientras la PC esté vinculada: si la
+// desvinculan desde la web se entera en el acto, y si estaba sin conexión, al reconectar (401).
+func (a *App) watchLink(ctx context.Context) {
+	wait := 5 * time.Second
+	for ctx.Err() == nil {
+		token := a.Store.Read().Token
+		if token == "" {
+			sleepCtx(ctx, 5*time.Second)
+			continue
+		}
+		conn, cancel := context.WithCancel(ctx)
+		go func() { // se desvinculó a mano o se volvió a vincular: reconectar con el token nuevo
+			for conn.Err() == nil {
+				sleepCtx(conn, 5*time.Second)
+				if a.Store.Read().Token != token {
+					cancel()
+				}
+			}
+		}()
+		start := time.Now()
+		err := api.New(a.BaseURL, token, a.Version).Events(conn, 90*time.Second, func(name string) {
+			if name == "revoked" {
+				a.unlinkedToken(token)
+			}
+		})
+		cancel()
+		switch {
+		case errors.Is(err, api.ErrUnauthorized):
+			a.unlinkedToken(token)
+			continue
+		case errors.Is(err, api.ErrNoEvents):
+			wait = 10 * time.Minute
+		case time.Since(start) > time.Minute:
+			wait = 5 * time.Second // estuvo conectado un rato: se cortó, reconectar enseguida
+		default:
+			wait = min(wait*2, 2*time.Minute)
+		}
+		sleepCtx(ctx, wait)
+	}
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
 }
 
 func (a *App) Installs() (string, []wow.Install) {
@@ -401,7 +470,7 @@ func (a *App) pollLink(ls api.LinkStart) {
 			a.log("error", "No se pudo vincular: %v", err)
 			return
 		}
-		a.Store.Update(func(s *state.State) { s.Token = r.Token; s.UserName = r.UserName })
+		a.Store.Update(func(s *state.State) { s.Token, s.UserName, s.UnlinkedAt = r.Token, r.UserName, nil })
 		a.log("info", "PC vinculada a %s.", r.UserName)
 		a.refreshConfig()
 		a.UploadNow()
@@ -414,7 +483,7 @@ func (a *App) pollLink(ls api.LinkStart) {
 }
 
 func (a *App) Unlink() {
-	a.Store.Update(func(s *state.State) { s.Token = ""; s.UserName = ""; s.DeviceName = "" })
+	a.Store.Update(func(s *state.State) { s.Token, s.UserName, s.DeviceName, s.UnlinkedAt = "", "", "", nil })
 	a.log("info", "Desvinculaste esta PC. No se sube nada más hasta que la vuelvas a vincular.")
 }
 
@@ -563,6 +632,7 @@ type Status struct {
 	SiteURL   string          `json:"siteUrl"`
 	Consent   bool            `json:"consent"`
 	Linked    bool            `json:"linked"`
+	Unlinked  *time.Time      `json:"unlinkedAt"` // la desvincularon desde la web
 	UserName  string          `json:"userName"`
 	Device    string          `json:"deviceName"`
 	Paused    bool            `json:"paused"`
@@ -588,7 +658,7 @@ func (a *App) Status() Status {
 	s := a.Store.Read()
 	root, installs := a.Installs()
 	st := Status{
-		Version: a.Version, SiteURL: a.BaseURL, Consent: s.ConsentAt != nil, Linked: s.Token != "",
+		Version: a.Version, SiteURL: a.BaseURL, Consent: s.ConsentAt != nil, Linked: s.Token != "", Unlinked: s.UnlinkedAt,
 		UserName: s.UserName, Device: s.DeviceName, Paused: s.Paused, AddonAuto: s.AddonAuto, WowRoot: root,
 		Autostart: AutostartEnabled(), Packaged: Packaged(), AppUpdate: a.appUpdateStatus(s),
 		Every: s.Every, EveryNow: int(a.batchEvery() / time.Second), Scans: a.ScansStatus(),
