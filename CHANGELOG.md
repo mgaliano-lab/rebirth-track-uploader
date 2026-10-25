@@ -12,6 +12,16 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.5.4] - 2026-10-25
+
+### Para todos
+
+- **Lo subido, a la vista**: en Actividad, el botón «Lo subido» muestra todo lo que esta PC mandó a la web, separado por tipo (registros de combate con cada lote, y cada tipo de archivo del juego con sus versiones). Con «Ver» se abre exactamente lo que recibió el sitio: las líneas del registro o el archivo, y lo que el sitio tomó de él.
+
+### Técnico
+
+- Panel: selector «Registro / Lo subido» en `#activitySec` y visor modal (Esc o clic afuera para cerrar). Datos del sitio (≥ 0.8.10) vía `GET /api/uploads` y `GET /api/uploads/data?kind=batch|file&id=` del panel → `api.Uploads` / `api.UploadData` (`/api/uploader/uploads…`), pasados tal cual. Se consulta al abrir la vista o con «Actualizar», no en el refresco de 3 s. El límite de lectura de respuestas del sitio sube de 1 a 8 MB (el contenido llega a 1 MB de texto).
+
 ## [0.5.3] - 2026-10-25
 
 ### Para todos

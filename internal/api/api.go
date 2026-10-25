@@ -59,7 +59,7 @@ func (c *Client) do(method, path string, body io.Reader, headers map[string]stri
 		return 0, err
 	}
 	defer res.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	b, _ := io.ReadAll(io.LimitReader(res.Body, 8<<20)) // el contenido de una subida llega a 1 MB de texto (más el JSON)
 	if res.StatusCode == http.StatusUnauthorized {
 		return res.StatusCode, ErrUnauthorized
 	}
@@ -157,6 +157,21 @@ func (c *Client) Events(ctx context.Context, idle time.Duration, onEvent func(na
 	return io.EOF
 }
 
+// Uploads: lo que subió esta PC según el sitio (registros de combate con sus lotes y archivos del
+// juego con cada versión). Se pasa tal cual al panel.
+func (c *Client) Uploads() (json.RawMessage, error) {
+	var out json.RawMessage
+	_, err := c.do("GET", "/api/uploader/uploads", nil, nil, &out)
+	return out, err
+}
+
+// UploadData: el contenido de un lote (kind "batch") o de una versión de un archivo ("file").
+func (c *Client) UploadData(kind string, id int) (json.RawMessage, error) {
+	var out json.RawMessage
+	_, err := c.do("GET", "/api/uploader/uploads/"+url.PathEscape(kind)+"/"+strconv.Itoa(id), nil, nil, &out)
+	return out, err
+}
+
 type Config struct {
 	UserName            string `json:"userName"`
 	DeviceName          string `json:"deviceName"`
@@ -246,7 +261,7 @@ func (c *Client) Scans(etag string) (env []byte, newEtag string, notModified boo
 		return nil, "", false, err
 	}
 	defer res.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	b, _ := io.ReadAll(io.LimitReader(res.Body, 8<<20)) // el contenido de una subida llega a 1 MB de texto (más el JSON)
 	switch {
 	case res.StatusCode == http.StatusNotModified:
 		return nil, etag, true, nil
