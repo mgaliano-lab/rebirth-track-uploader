@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -204,6 +205,30 @@ func (a *App) refreshConfig() {
 	a.cfg = &cfg
 	a.mu.Unlock()
 	a.Store.Update(func(s *state.State) { s.UserName = cfg.UserName; s.DeviceName = cfg.DeviceName })
+}
+
+// Uploads y UploadData: lo subido y su contenido, tal como lo tiene el sitio (pestaña «Lo subido»
+// de la actividad en el panel).
+func (a *App) Uploads() (json.RawMessage, error) {
+	return a.fromSite(func(c *api.Client) (json.RawMessage, error) { return c.Uploads() })
+}
+
+func (a *App) UploadData(kind string, id int) (json.RawMessage, error) {
+	if kind != "batch" && kind != "file" {
+		return nil, fmt.Errorf("tipo desconocido: %s", kind)
+	}
+	return a.fromSite(func(c *api.Client) (json.RawMessage, error) { return c.UploadData(kind, id) })
+}
+
+func (a *App) fromSite(fn func(*api.Client) (json.RawMessage, error)) (json.RawMessage, error) {
+	if a.Store.Read().Token == "" {
+		return nil, errors.New("la PC no está vinculada")
+	}
+	out, err := fn(a.client())
+	if errors.Is(err, api.ErrUnauthorized) {
+		a.unlinked()
+	}
+	return out, err
 }
 
 func (a *App) unlinked() { a.unlinkedToken(a.Store.Read().Token) }

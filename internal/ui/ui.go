@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -149,6 +150,14 @@ func (s *Server) Serve() error {
 	}
 	a := s.App
 	api("GET /api/status", func(r *http.Request) (any, error) { return a.Status(), nil })
+	api("GET /api/uploads", func(r *http.Request) (any, error) { return a.Uploads() })
+	api("GET /api/uploads/data", func(r *http.Request) (any, error) {
+		id, err := strconv.Atoi(r.URL.Query().Get("id"))
+		if err != nil {
+			return nil, err
+		}
+		return a.UploadData(r.URL.Query().Get("kind"), id)
+	})
 	api("POST /api/consent", func(r *http.Request) (any, error) { a.Consent(); go a.CheckAddon(false); return a.Status(), nil })
 	api("POST /api/link", func(r *http.Request) (any, error) { return a.StartLink() })
 	api("POST /api/unlink", func(r *http.Request) (any, error) { a.Unlink(); return a.Status(), nil })
