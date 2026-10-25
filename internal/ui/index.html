@@ -31,6 +31,7 @@
   .code { font:700 1.8rem ui-monospace,monospace; letter-spacing:.2em; color:#fff; background:#000; padding:6px 14px; border-radius:6px; border:1px solid var(--gold); }
   .act li { display:flex; gap:10px; font-size:.88rem; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.05); }
   .act time { color:var(--dim); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .act { max-height:260px; overflow-y:auto; padding-right:4px; }
   .act .upload { color:var(--ok); } .act .error { color:var(--bad); }
   .what { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   .what h3 { margin:0 0 6px; font-size:.95rem; }
@@ -100,9 +101,9 @@
   </div>
   <nav class="tabs" id="tabs" hidden role="tablist">
     <button data-tab="home" role="tab">Inicio <span class="n">1</span></button>
-    <button data-tab="wow" role="tab">World of Warcraft <span class="n">2</span></button>
+    <button data-tab="wow" role="tab">Configuraciones <span class="n">2</span></button>
     <button data-tab="old" role="tab">Registros anteriores <span class="n">3</span></button>
-    <button data-tab="cfg" role="tab">Cuenta y app <span class="n">4</span></button>
+    <button data-tab="cfg" role="tab">Cuenta <span class="n">4</span></button>
     <button data-tab="what" role="tab">Qué hace <span class="n">5</span></button>
   </nav>
 
@@ -159,7 +160,9 @@
       </div>
     </div>
   </section>
+  </div>
 
+  <div class="tab" data-pane="wow" hidden>
   <section id="appSec">
     <h2>App</h2>
     <div class="row small" id="autostartRow"><label><input type="checkbox" id="autostart" /> Iniciar con Windows (minimizada en la bandeja)</label></div>
@@ -176,9 +179,7 @@
     </div>
     <p class="hint" style="text-align:left;margin:10px 0 0">Atajos: <kbd>U</kbd> subir ahora · <kbd>P</kbd> pausar · <kbd>A</kbd> addon · <kbd>B</kbd> buscar actualización · <kbd>W</kbd> sitio · <kbd>1</kbd>–<kbd>5</kbd> pestañas</p>
   </section>
-  </div>
 
-  <div class="tab" data-pane="wow" hidden>
   <section id="wow" hidden>
     <h2>World of Warcraft</h2>
     <div class="row small"><span class="dim">Carpeta:</span><input type="text" id="root" class="grow" placeholder="C:\Program Files (x86)\World of Warcraft" /></div>
@@ -223,11 +224,6 @@
     </div>
     <p class="dim small" style="margin:4px 0 0">Más seguido = ves la banda en la web casi en vivo. Más espaciado = menos subidas (lo pendiente se sube igual al cerrar la app).</p>
   </section>
-
-  <section>
-    <h2>Actividad</h2>
-    <ul class="clean act" id="activity"></ul>
-  </section>
   </div>
 
   <div class="tab" data-pane="old" hidden>
@@ -245,6 +241,11 @@
     </div>
   </section>
   </div>
+  <!-- El registro de lo que va haciendo la app: siempre abajo, en cualquier pestaña. -->
+  <section id="activitySec">
+    <h2>Actividad</h2>
+    <ul class="clean act" id="activity"></ul>
+  </section>
 </main>
 <script>
 const K = new URLSearchParams(location.search).get('k')

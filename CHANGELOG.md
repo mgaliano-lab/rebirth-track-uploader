@@ -12,6 +12,17 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.5.3] - 2026-10-25
+
+### Para todos
+
+- **La actividad se ve siempre**: el registro de lo que va haciendo la app queda abajo de todo en cualquier pestaña, no solo en Inicio.
+- **Configuraciones en un solo lugar**: la pestaña «World of Warcraft» pasa a llamarse «Configuraciones» y junta las opciones de la app (inicio con Windows y actualización) con las de World of Warcraft (carpeta, versiones y addon). La pestaña «Cuenta y app» queda como «Cuenta».
+
+### Técnico
+
+- Panel (`internal/ui/index.html`): `#activitySec` sale de la pestaña `home` y va al final de `main` (con alto máximo y scroll); `#appSec` pasa de `cfg` a `wow`, arriba de `#wow`. Los ids de pestaña y los atajos 1–5 no cambian.
+
 ## [0.5.2] - 2026-10-25
 
 ### Para todos
