@@ -18,10 +18,12 @@ changelog: resume todo lo que hace la app hasta ahí.
 
 - **La actividad se ve siempre**: el registro de lo que va haciendo la app queda abajo de todo en cualquier pestaña, no solo en Inicio.
 - **Configuraciones en un solo lugar**: la pestaña «World of Warcraft» pasa a llamarse «Configuraciones» y junta las opciones de la app (inicio con Windows y actualización) con las de World of Warcraft (carpeta, versiones y addon). La pestaña «Cuenta y app» queda como «Cuenta».
+- **La ventana abre del tamaño justo**: la primera vez ocupa el alto disponible de la pantalla para que entre todo lo que hay que leer y aceptar, y en pantallas chicas o con zoom de Windows ya no queda cortada ni con la barra de título afuera.
 
 ### Técnico
 
 - Panel (`internal/ui/index.html`): `#activitySec` sale de la pestaña `home` y va al final de `main` (con alto máximo y scroll); `#appSec` pasa de `cfg` a `wow`, arriba de `#wow`. Los ids de pestaña y los atajos 1–5 no cambian.
+- Ventana (`internal/window/window_windows.go`, `placeWindow`): sin tamaño guardado abre de 1120 × hasta 1280 (lo que mide la vista de la primera vez, ~1220) achicado al área útil del monitor (`GetMonitorInfoW`, sin la barra de tareas) y centrada ahí. Antes era fija de 1120×780 y centrada con `SM_CYSCREEN` en aritmética sin signo: en pantallas de menos de 780 de alto lógico (ej. 1080p al 150 %) quedaba con la barra de título fuera de la pantalla. La posición guardada y el mínimo (900×620) también se ajustan al área útil. La app no declara DPI, así que todo va en unidades lógicas.
 
 ## [0.5.2] - 2026-10-25
 
