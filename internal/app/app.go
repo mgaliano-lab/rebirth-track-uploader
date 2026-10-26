@@ -99,6 +99,11 @@ const (
 	MaxEvery = 24 * time.Hour
 )
 
+// Cada cuánto se pide la config aunque no haya nada que subir: el sitio marca la PC «en línea» si
+// habló en los últimos 10 minutos (UploaderDevices.vue), y sin esto una PC prendida pero sin
+// bandas nuevas (o con la subida cada 30 min) aparecía gris.
+const heartbeatEvery = 4 * time.Minute
+
 func (a *App) batchEvery() time.Duration {
 	if s := a.Store.Read().Every; s > 0 {
 		return time.Duration(s) * time.Second
@@ -153,6 +158,7 @@ func (a *App) Run(ctx context.Context) {
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()
 	lastAddon := time.Now()
+	lastBeat := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -170,6 +176,10 @@ func (a *App) Run(ctx context.Context) {
 			}
 			if time.Since(a.lastRun) >= a.batchEvery() {
 				a.Cycle()
+			}
+			if time.Since(lastBeat) >= heartbeatEvery {
+				lastBeat = time.Now()
+				a.refreshConfig()
 			}
 			if time.Since(lastAddon) > 6*time.Hour {
 				lastAddon = time.Now()
