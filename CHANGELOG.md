@@ -12,6 +12,16 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.5.5] - 2026-10-26
+
+### Para todos
+
+- En «Mis PCs» de la web, la PC aparece en línea (punto verde) mientras la app esté prendida, aunque no estés en una banda ni haya nada nuevo que subir.
+
+### Técnico
+
+- Latido: `refreshConfig` (`GET /api/uploader/config`) cada 4 min desde el bucle principal, independiente de la frecuencia de subida. Antes solo se hablaba con el sitio al arrancar o al subir algo, y `lastSeenAt` (la web marca en línea con < 10 min) quedaba viejo. De paso, los cambios de config del sitio llegan sin reiniciar la app.
+
 ## [0.5.4] - 2026-10-25
 
 ### Para todos
