@@ -184,6 +184,21 @@ type Config struct {
 	SiteURL             string `json:"siteUrl"`
 }
 
+// Plans: Plans.lua con los planes de los personajes vinculados de la cuenta (planificador del sitio).
+type Plans struct {
+	File      string `json:"file"`
+	Count     int    `json:"count"`
+	UpdatedAt string `json:"updatedAt"`
+	SHA256    string `json:"sha256"`
+	Lua       string `json:"lua"`
+}
+
+func (c *Client) Plans() (Plans, int, error) {
+	var out Plans
+	code, err := c.do("GET", "/api/uploader/plans", nil, nil, &out)
+	return out, code, err
+}
+
 func (c *Client) Config() (Config, error) {
 	var out Config
 	_, err := c.do("GET", "/api/uploader/config", nil, nil, &out)

@@ -12,6 +12,16 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.6.0] - 2026-10-29
+
+### Para todos
+
+- **Tus planes llegan solos al juego**: los personajes del Planificador de personajes de la web que vinculaste a uno real se copian al addon (al abrir la app y cada pocos minutos). En el juego, **/reload** y **/rt plan** para ver la ruta de profesión, los talentos y el Legado contra tu avance.
+
+### Técnico
+
+- `SyncPlans`: `GET /api/uploader/plans` (Plans.lua armado por el sitio) al arrancar y con el latido de 4 min; `addon.WritePlans` lo deja en `AddOns/RebirthTrack/Plans.lua` de cada versión de WoW habilitada que tenga el addon, solo si cambió (escritura atómica). Tras reinstalar el addon (que reemplaza la carpeta) se vuelve a escribir. Un sitio sin el endpoint (404) se ignora.
+
 ## [0.5.5] - 2026-10-26
 
 ### Para todos
