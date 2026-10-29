@@ -62,6 +62,7 @@ type App struct {
 	linking    *Linking
 	cfg        *api.Config
 	latest     *addon.Release
+	plansSHA   string // los últimos planes bajados (para avisar solo cuando cambian)
 	lastRun    time.Time
 	running    bool
 	uploaded   int64
@@ -153,6 +154,7 @@ func (a *App) Run(ctx context.Context) {
 	a.refreshConfig()
 	a.SyncScans()
 	a.CheckAddon(false)
+	a.SyncPlans()
 	go a.CheckApp(false)
 	go a.watchLink(ctx)
 	tick := time.NewTicker(10 * time.Second)
@@ -180,6 +182,7 @@ func (a *App) Run(ctx context.Context) {
 			if time.Since(lastBeat) >= heartbeatEvery {
 				lastBeat = time.Now()
 				a.refreshConfig()
+				a.SyncPlans()
 			}
 			if time.Since(lastAddon) > 6*time.Hour {
 				lastAddon = time.Now()
@@ -648,7 +651,50 @@ func (a *App) CheckAddon(force bool) {
 			continue
 		}
 		a.removeOldAddonSettings(in)
+		a.mu.Lock()
+		a.plansSHA = "" // la carpeta se reemplazó: hay que volver a dejar Plans.lua
+		a.mu.Unlock()
+		go a.SyncPlans()
 		a.log("info", "Addon Rebirth Track v%s instalado en %s (recargá la interfaz con /reload si el juego está abierto).", rel.Version, in.Label)
+	}
+}
+
+// SyncPlans baja los planes de la cuenta (Plans.lua) y los deja en la carpeta del addon de cada
+// versión de WoW, para verlos en el juego con /rt plan. Solo escribe si el archivo cambió.
+func (a *App) SyncPlans() {
+	s := a.Store.Read()
+	if s.Token == "" || s.ConsentAt == nil {
+		return
+	}
+	p, code, err := a.client().Plans()
+	if code == 404 {
+		return // sitio sin planes todavía
+	}
+	if errors.Is(err, api.ErrUnauthorized) {
+		a.unlinked()
+		return
+	}
+	if err != nil {
+		a.log("error", "No pude bajar los planes de tus personajes: %v", err)
+		return
+	}
+	a.mu.Lock()
+	had := a.plansSHA != ""
+	a.plansSHA = p.SHA256
+	a.mu.Unlock()
+	_, installs := a.Installs()
+	for _, in := range installs {
+		if s.Disabled[in.Flavor] {
+			continue
+		}
+		wrote, err := addon.WritePlans(in.AddOnsDir(), []byte(p.Lua))
+		if err != nil {
+			a.log("error", "No pude escribir Plans.lua en %s: %v", in.Label, err)
+			continue
+		}
+		if wrote && (p.Count > 0 || had) {
+			a.log("info", "Planes de tus personajes actualizados en %s (%d): /reload en el juego y /rt plan para verlos.", in.Label, p.Count)
+		}
 	}
 }
 
