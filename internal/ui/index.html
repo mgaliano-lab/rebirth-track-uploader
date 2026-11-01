@@ -8,6 +8,23 @@
 <style>
   :root { --bg:#0d0705; --panel:#1a0d08; --border:#5a2a18; --gold:#e3a42c; --text:#efe3c8; --dim:#a8977a; --ok:#3fbf3f; --bad:#ff5a4a; --warn:#f0b232; }
   * { box-sizing: border-box; }
+  html { scrollbar-color:#5a2a18 #0d0705; }
+  /* Barra de título propia (solo en la ventana de la app, ver window_windows.go) */
+  #titlebar { position:sticky; top:0; z-index:15; display:flex; align-items:center; gap:8px; height:36px; padding:0 6px 0 12px;
+    background:#100705; border-bottom:1px solid var(--border); user-select:none; -webkit-user-select:none; cursor:default; }
+  #titlebar img { width:18px; height:18px; }
+  #titlebar .t { font-size:.8rem; color:var(--dim); letter-spacing:.02em; }
+  #titlebar .wbtns { margin-left:auto; display:flex; gap:6px; }
+  #titlebar .wbtn { position:relative; width:34px; height:26px; padding:0; display:grid; place-items:center; background:#140906; border:1px solid var(--border); color:var(--gold); border-radius:5px; }
+  #titlebar .wbtn svg { width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.4; }
+  #titlebar .wbtn:hover, #titlebar .wbtn:focus-visible { border-color:var(--gold); background:#2a120a; outline:none; }
+  #titlebar .wbtn.close:hover, #titlebar .wbtn.close:focus-visible { background:linear-gradient(#a0331c,#6e1d0e); border-color:#c9a24a; color:#fff3d6; }
+  #titlebar .edge { position:absolute; top:0; height:5px; }
+  #titlebar .edge.top { left:8px; right:8px; cursor:ns-resize; }
+  #titlebar .edge.tl { left:0; width:8px; cursor:nwse-resize; } #titlebar .edge.tr { right:0; width:8px; cursor:nesw-resize; }
+  body.maximized #titlebar .edge { display:none; }
+  body.maximized #wMax .mx, body:not(.maximized) #wMax .rs { display:none; }
+  #titlebar [data-tip]::after { top:calc(100% + 6px); }
   [hidden] { display: none !important; }
   a { color: var(--gold); } /* si no, .row (display:flex) le gana a hidden */
   body { margin:0; background:radial-gradient(ellipse at top,#2a0f08,var(--bg) 60%); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
@@ -86,9 +103,14 @@
   [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity:1; transform:none; }
   kbd { font:600 .72rem ui-monospace,monospace; border:1px solid #6b5a3a; border-bottom-width:2px; border-radius:4px; padding:0 4px; color:var(--gold); }
   /* Pestañas */
-  nav.tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); overflow-x:auto; }
+  /* La línea de abajo es un fondo (no un borde) para que la pestaña activa la tape sin salirse de
+     la barra: con margin-bottom:-1px la barra desbordaba 1px y WebView2 mostraba un scroll vertical.
+     Si las pestañas no entran se deslizan de costado, sin barra visible. */
+  nav.tabs { display:flex; gap:2px; overflow-x:auto; overflow-y:hidden; scrollbar-width:none;
+    background:linear-gradient(var(--border),var(--border)) left bottom / 100% 1px no-repeat; }
+  nav.tabs::-webkit-scrollbar { display:none; }
   nav.tabs button { background:transparent; border:1px solid transparent; border-bottom:0; border-radius:6px 6px 0 0; color:var(--dim); padding:8px 14px; font-weight:600; white-space:nowrap; }
-  nav.tabs button.on { background:var(--panel); border-color:var(--border); color:var(--gold); margin-bottom:-1px; }
+  nav.tabs button.on { background:var(--panel); border-color:var(--border); color:var(--gold); }
   nav.tabs button .n { font-size:.72rem; color:var(--dim); margin-left:4px; }
   .tab { display:flex; flex-direction:column; gap:16px; }
   .tab[hidden] { display:none !important; }
@@ -104,6 +126,15 @@
 </style>
 </head>
 <body>
+<div id="titlebar" hidden>
+  <div class="edge top" data-edge="resize-top"></div><div class="edge tl" data-edge="resize-topleft"></div><div class="edge tr" data-edge="resize-topright"></div>
+  <img src="/icon.png" alt="" /><span class="t">Rebirth Track Uploader</span>
+  <div class="wbtns">
+    <button class="wbtn" id="wMin" data-tip="Minimizar" aria-label="Minimizar"><svg viewBox="0 0 12 12"><path d="M2 6.5h8" /></svg></button>
+    <button class="wbtn" id="wMax" data-tip="Maximizar" aria-label="Maximizar"><svg viewBox="0 0 12 12"><rect class="mx" x="2" y="2" width="8" height="8" rx="1" /><g class="rs"><rect x="2" y="4" width="6" height="6" rx="1" /><path d="M4 4V2.5a.5.5 0 0 1 .5-.5H9.5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5H8" /></g></svg></button>
+    <button class="wbtn close" id="wClose" data-tip="Cerrar (la app sigue en la bandeja)" aria-label="Cerrar la ventana (la app sigue en la bandeja)"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" /></svg></button>
+  </div>
+</div>
 <main>
   <header>
     <img src="/icon.png" alt="" />
@@ -704,6 +735,41 @@ async function openViewer(title, kind, id) {
 }
 $('viewerClose').onclick = () => { $('viewer').hidden = true }
 $('viewer').onclick = (e) => { if (e.target === $('viewer')) $('viewer').hidden = true }
+// ── Barra de título propia: solo dentro de la ventana de la app (que expone rtWin); en el navegador
+// queda la del navegador. Arrastrar la barra mueve la ventana (y la acopla a los costados), doble
+// clic maximiza o restaura, y el borde de arriba la agranda.
+function setupTitlebar() {
+  const tb = $('titlebar')
+  tb.hidden = false
+  const skip = (e) => e.target.closest('button, .edge')
+  let down = null
+  tb.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return
+    const edge = e.target.closest('.edge')
+    if (edge) { e.preventDefault(); window.rtWin(edge.dataset.edge); return }
+    if (!skip(e)) down = { x: e.screenX, y: e.screenY }
+  })
+  // Arrastre recién al moverse (si no, el doble clic no llega: Windows se queda con el mouse).
+  window.addEventListener('mousemove', (e) => {
+    if (!down) return
+    if (!(e.buttons & 1)) { down = null; return }
+    if (Math.abs(e.screenX - down.x) + Math.abs(e.screenY - down.y) > 3) { down = null; window.rtWin('drag') }
+  })
+  window.addEventListener('mouseup', () => (down = null))
+  tb.addEventListener('dblclick', (e) => { if (!skip(e)) window.rtWin('max') })
+  $('wMin').onclick = () => window.rtWin('min')
+  $('wMax').onclick = () => window.rtWin('max')
+  $('wClose').onclick = () => window.rtWin('close')
+  const sync = async () => {
+    const max = await window.rtWinMaximized()
+    document.body.classList.toggle('maximized', max)
+    $('wMax').dataset.tip = max ? 'Restaurar' : 'Maximizar'
+    $('wMax').setAttribute('aria-label', $('wMax').dataset.tip)
+  }
+  window.addEventListener('resize', sync)
+  sync()
+}
+if (typeof window.rtWin === 'function') setupTitlebar()
 refresh(); setInterval(refresh, 3000)
 </script>
 </body>

@@ -12,6 +12,18 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.6.2] - 2026-11-01
+
+### Para todos
+
+- **Ventana con la cara de la app**: la barra de arriba de Windows se reemplaza por una propia, oscura y con los botones de minimizar, maximizar y cerrar en dorado. Se arrastra para mover la ventana, con doble clic se maximiza o restaura, y cerrar sigue dejando la app en la bandeja.
+- La barra de pestañas ya no muestra una barra de desplazamiento al costado.
+
+### Técnico
+
+- `internal/window`: la ventana sigue siendo `WS_OVERLAPPEDWINDOW` (acople, animaciones, bordes para redimensionar) pero se subclasea su wndproc para que `WM_NCCALCSIZE` le devuelva el alto del título al contenido (maximizada, se descuenta `SM_CYSIZEFRAME + SM_CXPADDEDBORDER` para que no se corte arriba). El panel pide las acciones con `rtWin(min|max|close|drag|resize-top|resize-topleft|resize-topright)` (vía `Dispatch`; arrastrar y el borde de arriba son `WM_NCLBUTTONDOWN` con `HTCAPTION`/`HTTOP…`; cerrar es `WM_CLOSE`, como la × nativa) y consulta `rtWinMaximized()` para el ícono de maximizar/restaurar.
+- Panel: `#titlebar` solo aparece si existe `rtWin` (en el navegador queda igual). El arrastre empieza al mover el mouse 3 px, para que el doble clic llegue. Pestañas: la línea inferior pasa a ser un fondo y se saca el `margin-bottom:-1px` de la activa, que hacía desbordar 1 px la barra y mostraba un scroll vertical en WebView2; `overflow-y:hidden` y scroll horizontal sin barra. Barra de desplazamiento de la página en los colores de la app (`scrollbar-color`).
+
 ## [0.6.1] - 2026-11-01
 
 ### Para todos

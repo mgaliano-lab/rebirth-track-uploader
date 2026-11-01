@@ -4,6 +4,11 @@
 // Windows), en vez de abrirlo en el navegador: sin barra de direcciones, con el título y el ícono
 // de la app. Cerrarla solo la oculta de la vista: la app sigue en la bandeja subiendo registros.
 // Si la PC no tiene WebView2, el panel se abre en el navegador como antes.
+//
+// La ventana no muestra la barra de título de Windows: el panel dibuja la suya (con minimizar,
+// maximizar y cerrar al estilo de la app) y le pide a la ventana lo que corresponde con rtWin.
+// Por debajo sigue siendo una ventana normal (WS_OVERLAPPEDWINDOW): se acopla a los costados, anima
+// al minimizar y se redimensiona desde los bordes; solo se le saca el alto del título (frameless).
 package window
 
 import (
@@ -53,6 +58,12 @@ var (
 	pMonitorFromRect = user32.NewProc("MonitorFromRect")
 	pMonitorFromWin  = user32.NewProc("MonitorFromWindow")
 	pGetMonitorInfoW = user32.NewProc("GetMonitorInfoW")
+	pSetWindowLongW  = user32.NewProc("SetWindowLongPtrW")
+	pCallWindowProcW = user32.NewProc("CallWindowProcW")
+	pIsZoomed        = user32.NewProc("IsZoomed")
+	pPostMessageW    = user32.NewProc("PostMessageW")
+	pReleaseCapture  = user32.NewProc("ReleaseCapture")
+	pGetSystemMetric = user32.NewProc("GetSystemMetrics")
 )
 
 type rect struct{ Left, Top, Right, Bottom int32 }
@@ -138,6 +149,15 @@ func (w *Window) run(url string) {
 	w.setIcon(hwnd)
 	w.placeWindow(wv, hwnd)
 	if err := wv.Bind("rtOpenExternal", func(u string) { w.external(u) }); err != nil {
+		log.Println("ventana:", err)
+	}
+	frameless(hwnd)
+	// Los botones y la barra de título del panel. Se ejecutan con Dispatch, fuera del aviso de
+	// WebView2 que trae el pedido (maximizar o arrastrar reentra en el bucle de mensajes).
+	if err := wv.Bind("rtWin", func(action string) { wv.Dispatch(func() { winAction(hwnd, action) }) }); err != nil {
+		log.Println("ventana:", err)
+	}
+	if err := wv.Bind("rtWinMaximized", func() bool { z, _, _ := pIsZoomed.Call(hwnd); return z != 0 }); err != nil {
 		log.Println("ventana:", err)
 	}
 	wv.Init(linksJS)
@@ -253,6 +273,79 @@ func (w *Window) trackBounds(hwnd uintptr, stop chan struct{}) {
 		last = r
 		if b, err := json.Marshal(r); err == nil {
 			_ = os.WriteFile(w.boundsFile(), b, 0o600)
+		}
+	}
+}
+
+// ── Sin la barra de título de Windows ────────────────────────────────────────────────────
+
+const (
+	wmClose         = 0x0010
+	wmNCCalcSize    = 0x0083
+	wmNCLButtonDown = 0x00A1
+	htCaption       = 2
+	htTop           = 12
+	htTopLeft       = 13
+	htTopRight      = 14
+)
+
+var (
+	origProc  uintptr // wndproc de go-webview2 (una sola ventana a la vez)
+	framedCB  = windows.NewCallback(framedProc)
+	edgeHitTo = map[string]uintptr{"resize-top": htTop, "resize-topleft": htTopLeft, "resize-topright": htTopRight}
+)
+
+// frameless reemplaza el wndproc de la ventana para quitar el área del título y vuelve a calcular
+// el marco. Los bordes de los costados y de abajo siguen siendo de Windows (invisibles, para
+// redimensionar); el de arriba lo pone el panel (rtWin("resize-top")).
+func frameless(hwnd uintptr) {
+	gwlpWndProc := -4
+	origProc, _, _ = pSetWindowLongW.Call(hwnd, uintptr(gwlpWndProc), framedCB)
+	pSetWindowPos.Call(hwnd, 0, 0, 0, 0, 0, 0x20|0x1|0x2|0x4|0x10) // SWP_FRAMECHANGED|NOSIZE|NOMOVE|NOZORDER|NOACTIVATE
+}
+
+func framedProc(hwnd, msg, wp, lp uintptr) uintptr {
+	if msg == wmNCCalcSize && wp != 0 {
+		// El primer rect de NCCALCSIZE_PARAMS es la ventana: Windows le resta el marco y el título;
+		// se le devuelve el borde de arriba para que el contenido llegue hasta el tope.
+		r := *(**rect)(unsafe.Pointer(&lp)) // lp apunta a memoria de Windows, no de Go
+		top := r.Top
+		pCallWindowProcW.Call(origProc, hwnd, msg, wp, lp)
+		r.Top = top
+		if z, _, _ := pIsZoomed.Call(hwnd); z != 0 {
+			// Maximizada, Windows la agranda un marco más allá de la pantalla: que no se corte arriba.
+			frame, _, _ := pGetSystemMetric.Call(33) // SM_CYSIZEFRAME
+			pad, _, _ := pGetSystemMetric.Call(92)   // SM_CXPADDEDBORDER
+			r.Top += int32(frame + pad)
+		}
+		return 0
+	}
+	ret, _, _ := pCallWindowProcW.Call(origProc, hwnd, msg, wp, lp)
+	return ret
+}
+
+// winAction: lo que pide la barra de título del panel.
+func winAction(hwnd uintptr, action string) {
+	switch action {
+	case "min":
+		pShowWindow.Call(hwnd, 6) // SW_MINIMIZE
+	case "max":
+		if z, _, _ := pIsZoomed.Call(hwnd); z != 0 {
+			pShowWindow.Call(hwnd, 9) // SW_RESTORE
+		} else {
+			pShowWindow.Call(hwnd, 3) // SW_MAXIMIZE
+		}
+	case "close":
+		pPostMessageW.Call(hwnd, wmClose, 0, 0) // como la × de Windows: se cierra la ventana, la app sigue en la bandeja
+	case "drag":
+		// Como si se apretara la barra de título nativa: mover, acoplar a los costados y, maximizada,
+		// volver al tamaño normal al arrastrar.
+		pReleaseCapture.Call()
+		pPostMessageW.Call(hwnd, wmNCLButtonDown, htCaption, 0)
+	default:
+		if ht, ok := edgeHitTo[action]; ok {
+			pReleaseCapture.Call()
+			pPostMessageW.Call(hwnd, wmNCLButtonDown, ht, 0)
 		}
 	}
 }
