@@ -12,6 +12,17 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.6.3] - 2026-11-01
+
+### Para todos
+
+- Los planes de tus personajes llegan al juego aunque otro programa (el antivirus o el mismo juego) esté mirando el archivo justo en ese momento: la app reintenta en vez de mostrar «Acceso denegado». Si igual no puede, lo avisa una sola vez con un mensaje claro y lo vuelve a intentar sola.
+
+### Técnico
+
+- `addon.WritePlans`: el reemplazo de `Plans.lua` (temporal + `os.Rename`) reintenta 6 veces con espera creciente (~4 s en total) y, si el archivo quedó de solo lectura, le agrega permiso de escritura. Antes un solo `MoveFileEx` fallido (archivo abierto sin `FILE_SHARE_DELETE` por el antivirus, el indexador o el juego) cortaba con «Acceso denegado» y quedaba hasta el próximo latido.
+- `SyncPlans`: el error de cada versión de WoW se anota en la actividad solo cuando cambia (antes se repetía cada 4 min), y el de permisos con un texto para el jugador en vez del error crudo de Windows.
+
 ## [0.6.2] - 2026-11-01
 
 ### Para todos

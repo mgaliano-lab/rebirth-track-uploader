@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -147,5 +148,37 @@ func TestAddonCheckError(t *testing.T) {
 	a.StartAddonCheck()
 	if st := waitAddon(t, a); st.Result != "error" || st.Error == "" {
 		t.Fatalf("%+v", st)
+	}
+}
+
+func TestPlansErrorLoggedOnce(t *testing.T) {
+	v := "0.4.1"
+	cdn := addonCDN(t, &v)
+	defer cdn.Close()
+	a, _ := newAddonApp(t, cdn.URL, false)
+	_, installs := a.Installs()
+	in := installs[0]
+	denied := &os.PathError{Op: "rename", Path: "Plans.lua", Err: os.ErrPermission}
+	count := func() int {
+		n := 0
+		for _, x := range a.Status().Activity {
+			if strings.Contains(x.Text, "Plans.lua") {
+				n++
+			}
+		}
+		return n
+	}
+	a.plansError(in, denied)
+	a.plansError(in, denied)
+	if n := count(); n != 1 {
+		t.Fatalf("el mismo error se anota una vez: %d", n)
+	}
+	if txt := a.Status().Activity[0].Text; !strings.Contains(txt, "Se reintenta solo") || strings.Contains(txt, "rename") {
+		t.Fatalf("mensaje: %s", txt)
+	}
+	a.plansError(in, nil) // se pudo escribir
+	a.plansError(in, denied)
+	if n := count(); n != 2 {
+		t.Fatalf("si vuelve a fallar después de andar, se avisa de nuevo: %d", n)
 	}
 }
