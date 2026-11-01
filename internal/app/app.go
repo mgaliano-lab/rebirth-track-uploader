@@ -62,6 +62,7 @@ type App struct {
 	linking    *Linking
 	cfg        *api.Config
 	latest     *addon.Release
+	addonOp    AddonOp
 	plansSHA   string // los últimos planes bajados (para avisar solo cuando cambian)
 	lastRun    time.Time
 	running    bool
@@ -70,10 +71,14 @@ type App struct {
 	wake       chan struct{}
 	appLatest  *update.Release
 	updating   bool
-	Quit       func()          // cierra la app (la pone main); se usa al actualizarse
-	imports    map[string]bool // archivos viejos elegidos para importar; se aplican al empezar el ciclo
-	scanCaches map[string]scanCache
-	scans      scanState
+	// Búsqueda de versión nueva de la app: en curso, cuándo terminó la última y su error.
+	appChecking  bool
+	appCheckedAt *time.Time
+	appCheckErr  string
+	Quit         func()          // cierra la app (la pone main); se usa al actualizarse
+	imports      map[string]bool // archivos viejos elegidos para importar; se aplican al empezar el ciclo
+	scanCaches   map[string]scanCache
+	scans        scanState
 	// ExtraScanKeys: claves públicas adicionales para el manifiesto de relevamientos (pruebas
 	// contra un sitio local con su propia clave; las de producción están en scans.TrustedKeys).
 	ExtraScanKeys []string
@@ -153,9 +158,9 @@ func (a *App) Run(ctx context.Context) {
 	a.loadScans()
 	a.refreshConfig()
 	a.SyncScans()
-	a.CheckAddon(false)
+	a.CheckAddon()
 	a.SyncPlans()
-	go a.CheckApp(false)
+	go a.CheckApp()
 	go a.watchLink(ctx)
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()
@@ -186,8 +191,8 @@ func (a *App) Run(ctx context.Context) {
 			}
 			if time.Since(lastAddon) > 6*time.Hour {
 				lastAddon = time.Now()
-				a.CheckAddon(false)
-				go a.CheckApp(false)
+				a.CheckAddon()
+				go a.CheckApp()
 			}
 		}
 	}
@@ -612,10 +617,48 @@ func human2(d time.Duration) string {
 	return d.String()
 }
 
-func (a *App) SetAddonAuto(v bool) { a.Store.Update(func(s *state.State) { s.AddonAuto = v }) }
+// SetAddonAuto activa o desactiva que el addon se instale y actualice solo. Al activarlo se busca
+// enseguida, sin esperar a la próxima revisión.
+func (a *App) SetAddonAuto(v bool) {
+	a.Store.Update(func(s *state.State) { s.AddonAuto = v })
+	if v {
+		go a.CheckAddon()
+	}
+}
 
-// CheckAddon busca la última versión del addon y, si corresponde, la instala en cada versión de WoW.
-func (a *App) CheckAddon(force bool) {
+// AddonOp es lo que está haciendo (o hizo por última vez) la búsqueda o instalación del addon, para
+// que el panel muestre «Buscando…», «Instalando…» y después el resultado.
+type AddonOp struct {
+	Busy   string     `json:"busy,omitempty"`   // checking | installing
+	Result string     `json:"result,omitempty"` // uptodate | available | installed | error
+	Error  string     `json:"error,omitempty"`
+	At     *time.Time `json:"at,omitempty"` // cuándo terminó
+}
+
+// beginAddon marca la operación como en curso; false si ya hay otra.
+func (a *App) beginAddon(busy string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.addonOp.Busy != "" {
+		return false
+	}
+	a.addonOp.Busy = busy
+	return true
+}
+
+func (a *App) endAddon(result string, err error) {
+	now := time.Now()
+	op := AddonOp{Result: result, At: &now}
+	if err != nil {
+		op.Result, op.Error = "error", err.Error()
+	}
+	a.mu.Lock()
+	a.addonOp = op
+	a.mu.Unlock()
+}
+
+// addonLatest consulta la última versión publicada del addon.
+func (a *App) addonLatest() (addon.Release, error) {
 	url := defaultAddonURL
 	a.mu.Lock()
 	if a.cfg != nil && a.cfg.AddonLatestURL != "" {
@@ -625,38 +668,138 @@ func (a *App) CheckAddon(force bool) {
 	rel, err := addon.Latest(url)
 	if err != nil {
 		a.log("error", "No pude consultar la última versión del addon: %v", err)
-		return
+		return rel, fmt.Errorf("no pude consultar la última versión: %w", err)
 	}
 	a.mu.Lock()
 	a.latest = &rel
 	a.mu.Unlock()
+	return rel, nil
+}
+
+// addonPending son las versiones de WoW habilitadas que no tienen esa versión del addon.
+func (a *App) addonPending(version string) []wow.Install {
 	s := a.Store.Read()
-	if !force && (!s.AddonAuto || s.ConsentAt == nil) {
+	_, installs := a.Installs()
+	var out []wow.Install
+	for _, in := range installs {
+		if !s.Disabled[in.Flavor] && addon.InstalledVersion(in.AddOnsDir()) != version {
+			out = append(out, in)
+		}
+	}
+	return out
+}
+
+func checkResult(pending []wow.Install) string {
+	if len(pending) > 0 {
+		return "available"
+	}
+	return "uptodate"
+}
+
+// CheckAddon es la revisión automática (al abrir la app y cada 6 horas): busca la última versión y,
+// si está activado «instalar y actualizar solo», la instala en cada versión de WoW.
+func (a *App) CheckAddon() {
+	if !a.beginAddon("checking") {
 		return
 	}
-	_, installs := a.Installs()
-	var zipData []byte
-	for _, in := range installs {
-		if s.Disabled[in.Flavor] || addon.InstalledVersion(in.AddOnsDir()) == rel.Version {
-			continue
+	rel, err := a.addonLatest()
+	if err != nil {
+		a.endAddon("", err)
+		return
+	}
+	pending := a.addonPending(rel.Version)
+	s := a.Store.Read()
+	if len(pending) == 0 || !s.AddonAuto || s.ConsentAt == nil {
+		a.endAddon(checkResult(pending), nil)
+		return
+	}
+	a.mu.Lock()
+	a.addonOp.Busy = "installing"
+	a.mu.Unlock()
+	a.endAddon(a.installAddon(rel, pending))
+}
+
+// StartAddonCheck es el botón «Buscar actualización» del addon: solo consulta, en segundo plano
+// (el panel ve «Buscando…» mientras tanto). false si ya había una búsqueda o instalación en curso.
+func (a *App) StartAddonCheck() bool {
+	if !a.beginAddon("checking") {
+		return false
+	}
+	go func() {
+		rel, err := a.addonLatest()
+		if err != nil {
+			a.endAddon("", err)
+			return
 		}
-		if zipData == nil {
-			if zipData, err = addon.Download(rel); err != nil {
-				a.log("error", "Descarga del addon: %v", err)
+		pending := a.addonPending(rel.Version)
+		if len(pending) > 0 {
+			a.log("info", "Hay una versión nueva del addon: v%s.", rel.Version)
+		} else {
+			a.log("info", "El addon está al día (v%s).", rel.Version)
+		}
+		a.endAddon(checkResult(pending), nil)
+	}()
+	return true
+}
+
+// StartAddonInstall es el botón «Instalar»: instala la versión encontrada (o la busca primero) en
+// las versiones de WoW que no la tienen, en segundo plano.
+func (a *App) StartAddonInstall() bool {
+	if !a.beginAddon("installing") {
+		return false
+	}
+	go func() {
+		a.mu.Lock()
+		latest := a.latest
+		a.mu.Unlock()
+		var rel addon.Release
+		if latest != nil {
+			rel = *latest
+		} else {
+			var err error
+			if rel, err = a.addonLatest(); err != nil {
+				a.endAddon("", err)
 				return
 			}
 		}
+		a.endAddon(a.installAddon(rel, a.addonPending(rel.Version)))
+	}()
+	return true
+}
+
+// installAddon baja el addon (una vez) y lo instala en cada versión de WoW pendiente.
+func (a *App) installAddon(rel addon.Release, pending []wow.Install) (string, error) {
+	if len(pending) == 0 {
+		a.log("info", "El addon ya está en v%s en todas las versiones de WoW.", rel.Version)
+		return "uptodate", nil
+	}
+	zipData, err := addon.Download(rel)
+	if err != nil {
+		a.log("error", "Descarga del addon: %v", err)
+		return "", fmt.Errorf("no pude bajar el addon: %w", err)
+	}
+	var lastErr error
+	ok := 0
+	for _, in := range pending {
 		if err := addon.Install(zipData, in.AddOnsDir()); err != nil {
 			a.log("error", "No pude instalar el addon en %s: %v", in.Label, err)
+			lastErr = fmt.Errorf("no pude instalarlo en %s: %w", in.Label, err)
 			continue
 		}
+		ok++
 		a.removeOldAddonSettings(in)
 		a.mu.Lock()
 		a.plansSHA = "" // la carpeta se reemplazó: hay que volver a dejar Plans.lua
 		a.mu.Unlock()
-		go a.SyncPlans()
 		a.log("info", "Addon Rebirth Track v%s instalado en %s (recargá la interfaz con /reload si el juego está abierto).", rel.Version, in.Label)
 	}
+	if ok > 0 {
+		go a.SyncPlans()
+	}
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "installed", nil
 }
 
 // SyncPlans baja los planes de la cuenta (Plans.lua) y los deja en la carpeta del addon de cada
@@ -708,6 +851,13 @@ type InstallStatus struct {
 	LastLog      string `json:"lastLog,omitempty"`
 }
 
+// AddonStatus: la búsqueda o instalación del addon en curso (o la última) y si alguna versión de WoW
+// habilitada no tiene la última.
+type AddonStatus struct {
+	AddonOp
+	Pending bool `json:"pending"`
+}
+
 type Status struct {
 	Version   string          `json:"version"`
 	SiteURL   string          `json:"siteUrl"`
@@ -721,6 +871,7 @@ type Status struct {
 	WowRoot   string          `json:"wowRoot"`
 	Installs  []InstallStatus `json:"installs"`
 	Latest    *addon.Release  `json:"addonLatest"`
+	Addon     AddonStatus     `json:"addon"`
 	Linking   *Linking        `json:"linking"`
 	LastRun   *time.Time      `json:"lastRun"`
 	NextRun   *time.Time      `json:"nextRun"`
@@ -760,6 +911,14 @@ func (a *App) Status() Status {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	st.Latest, st.Linking, st.Uploaded, st.Batches = a.latest, a.linking, a.uploaded, a.batches
+	st.Addon.AddonOp = a.addonOp
+	if a.latest != nil {
+		for _, is := range st.Installs {
+			if is.Enabled && is.AddonVersion != a.latest.Version {
+				st.Addon.Pending = true
+			}
+		}
+	}
 	if !a.lastRun.IsZero() {
 		lr := a.lastRun
 		nr := lr.Add(a.batchEveryLocked())

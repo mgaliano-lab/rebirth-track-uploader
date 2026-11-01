@@ -70,6 +70,17 @@
   .tool { position:relative; width:38px; height:38px; padding:0; display:grid; place-items:center; font-size:1.05rem; background:#140906; border:1px solid var(--border); color:var(--text); }
   .tool:hover:not(:disabled), .tool:focus-visible { border-color:var(--gold); outline:none; }
   .tool.on { border-color:var(--warn); color:var(--warn); }
+  /* Buscando / instalando: el botón se deshabilita y gira (ver busyBtn) */
+  @keyframes spin { to { transform:rotate(360deg) } }
+  .spin { display:inline-block; width:.9em; height:.9em; margin-right:6px; vertical-align:-.12em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
+  .tool.busy > .ico { display:inline-block; animation:spin 1s linear infinite; }
+  button.busy:disabled { opacity:.8; cursor:progress; }
+  button:active:not(:disabled) { transform:translateY(1px); filter:brightness(1.15); }
+  .ok { color:var(--ok); }
+  .res { min-height:1.5em; }
+  #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:20; max-width:min(92vw,520px); background:#000; color:var(--text); border:1px solid var(--gold);
+    border-radius:6px; padding:8px 14px; font-size:.9rem; box-shadow:0 6px 20px rgba(0,0,0,.6); }
+  #toast.ok { border-color:var(--ok); } #toast.bad { border-color:var(--bad); }
   [data-tip]::after { content:attr(data-tip); position:absolute; top:calc(100% + 8px); right:0; z-index:5; white-space:nowrap; background:#000; color:var(--text);
     border:1px solid var(--gold); border-radius:5px; padding:5px 9px; font:500 .78rem/1.3 system-ui,sans-serif; opacity:0; pointer-events:none; transform:translateY(-3px); transition:opacity .12s, transform .12s; }
   [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity:1; transform:none; }
@@ -102,8 +113,8 @@
       <div class="tools" id="tools" hidden>
         <button class="tool" id="tNow" data-tip="Subir ahora · U" aria-label="Subir ahora (U)">⬆️</button>
         <button class="tool" id="tPause" data-tip="Pausar subida · P" aria-label="Pausar (P)">⏸️</button>
-        <button class="tool" id="tAddon" data-tip="Instalar/actualizar addon · A" aria-label="Actualizar addon (A)">🧩</button>
-        <button class="tool" id="tUpd" data-tip="Buscar actualización de la app · B" aria-label="Buscar actualización (B)">🔄</button>
+        <button class="tool" id="tAddon" data-tip="Buscar actualización del addon · A" aria-label="Buscar actualización del addon (A)"><span class="ico">🧩</span></button>
+        <button class="tool" id="tUpd" data-tip="Buscar actualización de la app · B" aria-label="Buscar actualización de la app (B)"><span class="ico">🔄</span></button>
         <button class="tool" id="tSite" data-tip="Abrir rebirthknights.fun · W" aria-label="Abrir el sitio (W)">🌐</button>
       </div>
     </div>
@@ -187,11 +198,12 @@
     <p class="dim small" id="autostartStore" hidden>Inicio con Windows: activalo o desactivalo en Configuración › Aplicaciones › Inicio (Rebirth Track Uploader).</p>
     <div class="row small" style="margin-top:10px" id="appUpdRow">
       <label><input type="checkbox" id="appAuto" /> Actualizar la app sola</label>
-      <span class="dim grow" id="appUpdInfo"></span>
-      <button class="ghost" id="appUpdNow">Buscar actualización</button>
+      <span class="grow res" id="appUpdInfo" role="status" aria-live="polite"></span>
+      <button class="ghost" id="appCheck">Buscar actualización</button>
+      <button id="appUpdNow" hidden>Actualizar</button>
     </div>
     <div class="row small" style="margin-top:10px" id="appUpdStore" hidden>
-      <span class="dim grow" id="appStoreInfo">Instalada desde la Microsoft Store: se actualiza desde la Store.</span>
+      <span class="grow" id="appStoreInfo" role="status" aria-live="polite">Instalada desde la Microsoft Store: se actualiza desde la Store.</span>
       <button class="ghost" id="appStoreCheck">Buscar actualización</button>
       <button id="appStoreOpen" hidden>Actualizar en la Microsoft Store</button>
     </div>
@@ -210,8 +222,12 @@
     <p class="err small" id="rootErr" hidden></p>
     <ul class="clean" id="flavors" style="margin-top:10px"></ul>
     <div class="row small" style="margin-top:10px">
-      <label><input type="checkbox" id="addonAuto" /> Mantener el addon actualizado solo</label>
-      <button class="ghost" id="addonNow">Instalar/actualizar addon ahora</button>
+      <label title="Al abrir la app y cada 6 horas busca la última versión y la instala en cada versión de WoW activada"><input type="checkbox" id="addonAuto" /> Instalar y actualizar el addon solo</label>
+    </div>
+    <div class="row small" style="margin-top:8px">
+      <span class="grow res" id="addonInfo" role="status" aria-live="polite"></span>
+      <button class="ghost" id="addonCheck">Buscar actualización</button>
+      <button id="addonInstall" hidden>Instalar</button>
     </div>
   </section>
   </div>
@@ -282,6 +298,7 @@
     </div>
   </div>
 </main>
+<div id="toast" role="status" aria-live="polite" hidden></div>
 <script>
 const K = new URLSearchParams(location.search).get('k')
 const $ = (id) => document.getElementById(id)
@@ -361,6 +378,7 @@ function render(s) {
       <span class="small dim">${i.logs} registro(s)${i.lastLog ? ' · último ' + esc(i.lastLog) : ''}</span>
     </li>`).join('') : '<li class="dim">No encontré World of Warcraft. Indicá la carpeta arriba (la que contiene _retail_, _classic_era_, la de WoW Forever, etc.).</li>'
   $('addonAuto').checked = s.addonAutoUpdate
+  renderAddon(s)
   $('autostart').checked = s.autostart
   $('autostartRow').hidden = s.packaged
   $('autostartStore').hidden = !s.packaged
@@ -377,23 +395,7 @@ function render(s) {
       $('everyN').value = hours ? ev / 3600 : Math.round(ev / 60)
     }
   }
-  const u = s.appUpdate || {}
-  $('appUpdRow').hidden = u.mode === 'store'
-  $('appUpdStore').hidden = u.mode !== 'store'
-  $('appAuto').checked = !!u.auto
-  if (u.mode === 'store') {
-    $('appStoreInfo').textContent = u.available
-      ? `Hay una versión nueva: v${u.latest}. Instalada desde la Microsoft Store, se actualiza desde la Store (si todavía no aparece, Microsoft la está revisando: puede tardar un día).`
-      : u.latest ? `Al día (última v${u.latest}). Instalada desde la Microsoft Store: se actualiza desde la Store.` : 'Instalada desde la Microsoft Store: se actualiza desde la Store.'
-    $('appStoreOpen').hidden = !u.available
-    $('appStoreCheck').hidden = !!u.available
-  }
-  $('storeBanner').hidden = !(u.mode === 'store' && u.available)
-  if (u.mode === 'store' && u.available) $('storeBannerText').textContent = `Salió la v${u.latest} (tenés la v${s.version}). La app de la Microsoft Store se actualiza desde la Store.`
-  if (u.updating) { $('pill').textContent = 'Actualizando… se reconecta sola'; $('pill').className = 'pill warn' }
-  $('appUpdInfo').textContent = u.updating ? 'Actualizando…' : u.available ? `Hay una versión nueva: v${u.latest}` : u.latest ? `Al día (última v${u.latest})` : ''
-  $('appUpdNow').textContent = u.available ? `Actualizar a v${u.latest}` : 'Buscar actualización'
-  $('appUpdNow').disabled = !!u.updating
+  renderApp(s)
   $('pause').textContent = s.paused ? 'Reanudar' : 'Pausar'
   $('uploadInfo').innerHTML = s.linked
     ? `Último ciclo ${fmt(s.lastRun)} · próximo ${fmt(s.nextRun)} · subidos en esta sesión: <b>${kb(s.uploadedBytes)}</b> en ${s.batches} lote(s)`
@@ -401,6 +403,125 @@ function render(s) {
   renderScans(s)
   $('activity').innerHTML = s.activity.length ? s.activity.slice(0, 60).map((a) => `<li><time>${fmt(a.at)}</time><span class="${esc(a.kind)}">${esc(a.text)}</span></li>`).join('') : '<li class="dim">Sin actividad todavía.</li>'
 }
+// ── Buscar / instalar (addon y app) ──
+// El pedido vuelve enseguida y la búsqueda sigue en la app: el panel muestra «Buscando…» o
+// «Instalando…» con el botón deshabilitado mientras dure (al menos MIN_BUSY, para que el click se
+// note aunque la respuesta sea instantánea), consulta seguido hasta que termina y deja el resultado.
+const MIN_BUSY = 800
+const ops = {} // addon | app → { busy, until, from, answered }
+function startOp(key, busy, path, from) {
+  if (opBusy(key)) return
+  ops[key] = { busy, until: Date.now() + MIN_BUSY, from }
+  if (last) render(last)
+  call(path, {}).then((s) => { if (ops[key]) ops[key].answered = true; render(s) })
+    .catch((e) => { delete ops[key]; if (last) render(last); toast(e.message, 'bad') })
+}
+// opBusy: lo que está haciendo la app según el servidor o, si todavía no respondió o terminó hace
+// menos de MIN_BUSY, lo que se pidió.
+function opBusy(key, server) {
+  const o = ops[key]
+  if (server) return server
+  return o && (!o.answered || Date.now() < o.until) ? o.busy : ''
+}
+// opDone: el pedido terminó (se avisa con un cartel si se pidió desde la barra o desde otra pestaña).
+function opDone(key, server, text) {
+  const o = ops[key]
+  if (!o || server || opBusy(key)) return
+  delete ops[key]
+  if (text[0] && (o.from === 'tool' || tab !== 'wow')) toast((key === 'addon' ? 'Addon: ' : 'App: ') + text[0], text[1])
+}
+function busyBtn(btn, busy, label, idle) {
+  btn.disabled = !!busy
+  btn.classList.toggle('busy', !!busy)
+  const html = busy ? `<span class="spin"></span>${esc(label)}` : esc(idle)
+  if (btn.innerHTML !== html) btn.innerHTML = html
+}
+function busyTool(btn, busy, tip) {
+  btn.disabled = !!busy
+  btn.classList.toggle('busy', !!busy)
+  btn.dataset.tip = tip
+  btn.setAttribute('aria-label', tip.replace(' · ', ' (') + ')')
+}
+function setRes(el, [text, kind], at) {
+  el.className = el.className.replace(/\b(ok|err|dim)\b/g, '').trim() + (kind ? ' ' + kind : '')
+  el.innerHTML = esc(text) + (text && at && kind !== 'dim' ? ` <span class="dim">· ${fmt(at)}</span>` : '')
+}
+let toastTimer = null
+function toast(text, kind) {
+  const t = $('toast')
+  t.textContent = text
+  t.className = kind || ''
+  t.hidden = false
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (t.hidden = true), 5000)
+}
+const cap = (t) => t ? t[0].toUpperCase() + t.slice(1) : t
+function addonText(s, busy) {
+  const a = s.addon || {}
+  const v = s.addonLatest?.version
+  if (busy === 'checking') return ['Buscando actualización del addon…', 'dim']
+  if (busy === 'installing') return [`Instalando${v ? ' v' + v : ''}…`, 'dim']
+  if (a.result === 'error') return [cap(a.error), 'err']
+  if (!v) return ['', '']
+  if (a.pending) {
+    const any = (s.installs || []).some((i) => i.enabled && i.addonVersion)
+    return [any ? `Hay una nueva: v${v}` : `Lista para instalar: v${v}`, '']
+  }
+  if (a.result === 'installed') return [`Instalado v${v} ✓`, 'ok']
+  return [`Tenés la última (v${v}) ✓`, 'ok']
+}
+function renderAddon(s) {
+  const a = s.addon || {}
+  const busy = opBusy('addon', a.busy)
+  const v = s.addonLatest?.version
+  const text = addonText(s, busy)
+  setRes($('addonInfo'), text, a.at)
+  busyBtn($('addonCheck'), busy === 'checking', 'Buscando…', 'Buscar actualización')
+  $('addonCheck').disabled = !!busy
+  $('addonInstall').hidden = !(a.pending || busy === 'installing')
+  busyBtn($('addonInstall'), busy === 'installing', 'Instalando…', v ? `Instalar v${v}` : 'Instalar')
+  $('addonInstall').disabled = !!busy
+  busyTool($('tAddon'), busy, busy === 'installing' ? 'Instalando el addon… · A' : busy ? 'Buscando actualización del addon… · A'
+    : a.pending && v ? `Instalar el addon v${v} · A` : 'Buscar actualización del addon · A')
+  opDone('addon', a.busy, text)
+}
+function appText(s, busy) {
+  const u = s.appUpdate || {}
+  if (u.updating) return [`Actualizando a v${u.latest}… la app se reinicia sola`, 'dim']
+  if (busy) return ['Buscando actualización de la app…', 'dim']
+  if (u.error) return [cap(u.error), 'err']
+  if (u.available) return [`Hay una nueva: v${u.latest}`, '']
+  if (u.latest) return [`Tenés la última (v${s.version}) ✓`, 'ok']
+  return ['', '']
+}
+function renderApp(s) {
+  const u = s.appUpdate || {}
+  const store = u.mode === 'store'
+  const busy = opBusy('app', u.checking || u.updating ? 'checking' : '')
+  const text = appText(s, busy)
+  $('appUpdRow').hidden = store
+  $('appUpdStore').hidden = !store
+  $('appAuto').checked = !!u.auto
+  if (store) {
+    setRes($('appStoreInfo'), text[0] ? [text[0] + (u.available ? ' — actualizala desde la Microsoft Store (si todavía no aparece, Microsoft la está revisando: puede tardar un día).' : ''), text[1]] : ['Instalada desde la Microsoft Store: se actualiza desde la Store.', 'dim'], u.checkedAt)
+    $('appStoreOpen').hidden = !u.available
+    busyBtn($('appStoreCheck'), busy, 'Buscando…', 'Buscar actualización')
+  } else {
+    setRes($('appUpdInfo'), text, u.checkedAt)
+    busyBtn($('appCheck'), busy && !u.updating, 'Buscando…', 'Buscar actualización')
+    $('appCheck').disabled = !!busy
+    $('appUpdNow').hidden = !(u.available || u.updating)
+    busyBtn($('appUpdNow'), u.updating, 'Actualizando…', `Actualizar a v${u.latest}`)
+    $('appUpdNow').disabled = !!busy
+  }
+  $('storeBanner').hidden = !(store && u.available)
+  if (store && u.available) $('storeBannerText').textContent = `Salió la v${u.latest} (tenés la v${s.version}). La app de la Microsoft Store se actualiza desde la Store.`
+  if (u.updating) { $('pill').textContent = 'Actualizando… se reconecta sola'; $('pill').className = 'pill warn' }
+  busyTool($('tUpd'), busy, u.updating ? 'Actualizando la app… · B' : busy ? 'Buscando actualización de la app… · B'
+    : u.available ? (store ? `Abrir la Microsoft Store (v${u.latest}) · B` : `Actualizar la app a v${u.latest} · B`) : 'Buscar actualización de la app · B')
+  if (!u.updating) opDone('app', u.checking ? 'checking' : '', text)
+}
+const addonAct = (from) => last?.addon?.pending ? startOp('addon', 'installing', '/api/addon/install', from) : startOp('addon', 'checking', '/api/addon/check', from)
 const sz = (n) => n < 1024 ? `${n} B` : kb(n)
 const dur = (n) => n % 3600 === 0 ? `${n / 3600} h` : n % 60 === 0 ? `${n / 60} min` : `${n} s`
 const SRC = { sitio: 'del sitio', 'caché': 'guardada (sin conexión con el sitio)', incluido: 'incluida en la app' }
@@ -427,6 +548,7 @@ async function refresh() {
     if (loadedVersion && s.version !== loadedVersion) { location.reload(); return }
     loadedVersion = s.version
     render(s)
+    if (Object.keys(ops).length || s.addon?.busy || s.appUpdate?.checking) setTimeout(refresh, 400)
   } catch (e) {
     const updating = last?.appUpdate?.updating
     $('pill').textContent = updating ? 'Actualizando… se reconecta sola' : 'Sin conexión con la app (¿está cerrada?)'
@@ -439,7 +561,8 @@ $('link').onclick = async () => { try { await call('/api/link', {}); refresh() }
 $('unlink').onclick = act(() => call('/api/unlink', {}))
 $('pause').onclick = act(async () => call('/api/pause', { paused: $('pause').textContent === 'Pausar' }))
 $('now').onclick = act(() => call('/api/upload-now', {}))
-$('addonNow').onclick = act(() => call('/api/addon/install', {}))
+$('addonCheck').onclick = () => startOp('addon', 'checking', '/api/addon/check', 'panel')
+$('addonInstall').onclick = () => startOp('addon', 'installing', '/api/addon/install', 'panel')
 $('scansCheck').onclick = act(() => call('/api/scans/check', {}))
 $('addonAuto').onchange = act(() => call('/api/settings', { addonAutoUpdate: $('addonAuto').checked }))
 async function saveEvery(seconds) {
@@ -455,8 +578,9 @@ $('every').onchange = () => {
 $('everyN').onfocus = () => (everyEditing = true)
 $('everySave').onclick = () => saveEvery(Math.round(Number($('everyN').value) * Number($('everyU').value)))
 $('appAuto').onchange = act(() => call('/api/settings', { appAutoUpdate: $('appAuto').checked }))
-$('appUpdNow').onclick = act(() => call('/api/app/update', {}))
-$('appStoreCheck').onclick = act(() => call('/api/app/update', {}))
+$('appCheck').onclick = () => startOp('app', 'checking', '/api/app/check', 'panel')
+$('appUpdNow').onclick = () => startOp('app', 'checking', '/api/app/update', 'panel')
+$('appStoreCheck').onclick = () => startOp('app', 'checking', '/api/app/check', 'panel')
 $('appStoreOpen').onclick = act(() => call('/api/app/store', {}))
 $('storeBannerBtn').onclick = act(() => call('/api/app/store', {}))
 $('autostart').onchange = act(() => call('/api/settings', { autostart: $('autostart').checked }))
@@ -511,8 +635,12 @@ $('oldImport').onclick = async () => {
 // ── Barra de accesos y atajos ──
 $('tNow').onclick = act(() => call('/api/upload-now', {}))
 $('tPause').onclick = act(() => call('/api/pause', { paused: !last?.paused }))
-$('tAddon').onclick = act(() => call('/api/addon/install', {}))
-$('tUpd').onclick = act(() => call('/api/app/update', {}))
+$('tAddon').onclick = () => addonAct('tool')
+$('tUpd').onclick = () => {
+  const u = last?.appUpdate || {}
+  if (u.available && u.mode === 'store') act(() => call('/api/app/store', {}))()
+  else startOp('app', 'checking', u.available ? '/api/app/update' : '/api/app/check', 'tool')
+}
 $('tSite').onclick = () => window.open(last?.siteUrl || 'https://rebirthknights.fun', '_blank', 'noopener')
 document.addEventListener('keydown', (e) => {
   if (!$('viewer').hidden) { if (e.key === 'Escape') $('viewer').hidden = true; return }

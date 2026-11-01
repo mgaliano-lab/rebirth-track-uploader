@@ -158,7 +158,7 @@ func (s *Server) Serve() error {
 		}
 		return a.UploadData(r.URL.Query().Get("kind"), id)
 	})
-	api("POST /api/consent", func(r *http.Request) (any, error) { a.Consent(); go a.CheckAddon(false); return a.Status(), nil })
+	api("POST /api/consent", func(r *http.Request) (any, error) { a.Consent(); go a.CheckAddon(); return a.Status(), nil })
 	api("POST /api/link", func(r *http.Request) (any, error) { return a.StartLink() })
 	api("POST /api/unlink", func(r *http.Request) (any, error) { a.Unlink(); return a.Status(), nil })
 	api("POST /api/pause", func(r *http.Request) (any, error) {
@@ -183,7 +183,10 @@ func (s *Server) Serve() error {
 		}
 		return map[string]int{"queued": n}, nil
 	})
-	api("POST /api/app/update", func(r *http.Request) (any, error) { go a.CheckApp(true); return a.Status(), nil })
+	// Buscar e instalar corren en segundo plano: la respuesta ya trae la búsqueda en curso y el panel
+	// sigue el estado hasta que termina.
+	api("POST /api/app/check", func(r *http.Request) (any, error) { a.StartAppCheck(false); return a.Status(), nil })
+	api("POST /api/app/update", func(r *http.Request) (any, error) { a.StartAppCheck(true); return a.Status(), nil })
 	api("POST /api/app/store", func(r *http.Request) (any, error) { a.OpenStore(); return a.Status(), nil })
 	api("POST /api/wow/browse", func(r *http.Request) (any, error) {
 		if _, err := a.BrowseWowRoot(); err != nil {
@@ -198,7 +201,8 @@ func (s *Server) Serve() error {
 		return a.Status(), nil
 	})
 	api("POST /api/scans/check", func(r *http.Request) (any, error) { a.CheckScansNow(); return a.Status(), nil })
-	api("POST /api/addon/install", func(r *http.Request) (any, error) { a.CheckAddon(true); return a.Status(), nil })
+	api("POST /api/addon/check", func(r *http.Request) (any, error) { a.StartAddonCheck(); return a.Status(), nil })
+	api("POST /api/addon/install", func(r *http.Request) (any, error) { a.StartAddonInstall(); return a.Status(), nil })
 	api("POST /api/settings", func(r *http.Request) (any, error) {
 		b := body(r)
 		if v, ok := b["flavor"].(string); ok {
