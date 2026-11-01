@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 	"sync"
@@ -63,7 +64,8 @@ type App struct {
 	cfg        *api.Config
 	latest     *addon.Release
 	addonOp    AddonOp
-	plansSHA   string // los últimos planes bajados (para avisar solo cuando cambian)
+	plansSHA   string            // los últimos planes bajados (para avisar solo cuando cambian)
+	plansErr   map[string]string // último error al escribir Plans.lua, por versión de WoW
 	lastRun    time.Time
 	running    bool
 	uploaded   int64
@@ -832,13 +834,38 @@ func (a *App) SyncPlans() {
 		}
 		wrote, err := addon.WritePlans(in.AddOnsDir(), []byte(p.Lua))
 		if err != nil {
-			a.log("error", "No pude escribir Plans.lua en %s: %v", in.Label, err)
+			a.plansError(in, err)
 			continue
 		}
+		a.plansError(in, nil)
 		if wrote && (p.Count > 0 || had) {
 			a.log("info", "Planes de tus personajes actualizados en %s (%d): /reload en el juego y /rt plan para verlos.", in.Label, p.Count)
 		}
 	}
+}
+
+// plansError anota en la actividad que no se pudo escribir Plans.lua, una vez por error (se
+// reintenta en cada latido, cada 4 minutos, y si no se repetiría el mismo aviso).
+func (a *App) plansError(in wow.Install, err error) {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	a.mu.Lock()
+	if a.plansErr == nil {
+		a.plansErr = map[string]string{}
+	}
+	same := a.plansErr[in.Flavor] == msg
+	a.plansErr[in.Flavor] = msg
+	a.mu.Unlock()
+	if err == nil || same {
+		return
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		a.log("error", "No pude actualizar los planes en %s: Windows no dejó reemplazar Plans.lua (puede que otro programa, como el antivirus o el juego, lo tenga abierto). Se reintenta solo en unos minutos.", in.Label)
+		return
+	}
+	a.log("error", "No pude escribir Plans.lua en %s: %v (se reintenta en unos minutos)", in.Label, err)
 }
 
 // ── Estado para el panel ───────────────────────────────────────────────────────────────

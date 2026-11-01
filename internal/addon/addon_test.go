@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func zipOf(files map[string]string) []byte {
@@ -59,5 +61,37 @@ func TestWritePlans(t *testing.T) {
 	got, _ := os.ReadFile(filepath.Join(dir, "RebirthTrack", PlansFile))
 	if !bytes.Equal(got, lua) {
 		t.Fatalf("contenido %q", got)
+	}
+}
+
+func TestWritePlansReadOnlyAndBlocked(t *testing.T) {
+	replaceWait = time.Millisecond
+	dir := t.TempDir()
+	addon := filepath.Join(dir, "RebirthTrack")
+	os.MkdirAll(addon, 0o755)
+	os.WriteFile(filepath.Join(addon, "RebirthTrack.toc"), []byte("## Version: 1\n"), 0o600)
+	dst := filepath.Join(addon, PlansFile)
+
+	// Plans.lua de solo lectura: se reemplaza igual.
+	os.WriteFile(dst, []byte("viejo"), 0o444)
+	if wrote, err := WritePlans(dir, []byte("nuevo")); !wrote || err != nil {
+		t.Fatalf("%v %v", wrote, err)
+	}
+	if got, _ := os.ReadFile(dst); string(got) != "nuevo" {
+		t.Fatalf("%q", got)
+	}
+
+	// Si no se puede reemplazar, después de reintentar devuelve el error y no deja temporales.
+	os.Remove(dst)
+	os.Mkdir(dst, 0o755) // un directorio en lugar del archivo: el reemplazo falla siempre
+	os.WriteFile(filepath.Join(dst, "x"), []byte("x"), 0o600)
+	if _, err := WritePlans(dir, []byte("otro")); err == nil {
+		t.Fatal("tenía que fallar")
+	}
+	entries, _ := os.ReadDir(addon)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".plans-") {
+			t.Fatalf("quedó el temporal %s", e.Name())
+		}
 	}
 }
