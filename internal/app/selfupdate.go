@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/state"
 	"github.com/mgaliano-lab/rebirth-track-uploader/internal/update"
@@ -35,15 +36,55 @@ type AppUpdate struct {
 	StoreURL  string `json:"storeUrl,omitempty"` // solo instalada desde la Store
 	Available bool   `json:"available"`
 	Updating  bool   `json:"updating"`
+	// Búsqueda: en curso, y cómo terminó la última (error si no se pudo consultar GitHub).
+	Checking  bool       `json:"checking"`
+	CheckedAt *time.Time `json:"checkedAt,omitempty"`
+	Error     string     `json:"error,omitempty"`
 }
 
-// CheckApp busca una versión nueva de la app y, si está activada la actualización automática
-// (o la pidió el usuario), la instala y reinicia la app.
-func (a *App) CheckApp(force bool) {
+// beginAppCheck marca una búsqueda en curso; false si ya hay una o se está actualizando.
+func (a *App) beginAppCheck() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.appChecking || a.updating {
+		return false
+	}
+	a.appChecking = true
+	return true
+}
+
+// CheckApp es la revisión automática (al abrir la app y cada 6 horas): si hay una versión nueva y
+// está activada la actualización automática, la instala y reinicia la app.
+func (a *App) CheckApp() {
+	if a.beginAppCheck() {
+		a.checkApp(false, false)
+	}
+}
+
+// StartAppCheck es el botón «Buscar actualización» (install=false: solo consulta y avisa) o
+// «Actualizar a vX» (install=true). Corre en segundo plano; el panel ve la búsqueda en curso.
+func (a *App) StartAppCheck(install bool) bool {
+	if !a.beginAppCheck() {
+		return false
+	}
+	go a.checkApp(true, install)
+	return true
+}
+
+func (a *App) checkApp(user, install bool) {
 	mode := InstallMode()
 	rel, err := update.Latest()
+	now := time.Now()
+	a.mu.Lock()
+	a.appChecking = false
+	a.appCheckedAt = &now
+	a.appCheckErr = ""
 	if err != nil {
-		if force {
+		a.appCheckErr = "no pude buscar actualizaciones: " + err.Error()
+	}
+	a.mu.Unlock()
+	if err != nil {
+		if user {
 			a.log("error", "No pude buscar actualizaciones de la app: %v", err)
 		}
 		return
@@ -51,27 +92,35 @@ func (a *App) CheckApp(force bool) {
 	a.mu.Lock()
 	prev := a.appLatest
 	a.appLatest = &rel
-	busy := a.updating
 	a.mu.Unlock()
+	newer := update.Newer(rel.Version, a.Version)
 	if mode == "store" {
 		// Se avisa una vez por versión; actualizar es abrir la Store (OpenStore).
-		if update.Newer(rel.Version, a.Version) && (force || prev == nil || prev.Version != rel.Version) {
+		if newer && (user || prev == nil || prev.Version != rel.Version) {
 			a.log("info", "Hay una versión nueva de la app (v%s): actualizala desde la Microsoft Store.", rel.Version)
-		} else if force {
+		} else if user {
 			a.log("info", "La app está al día (v%s).", a.Version)
 		}
 		return
 	}
-	if busy || !update.Newer(rel.Version, a.Version) {
-		if force {
+	if !newer {
+		if user {
 			a.log("info", "La app está al día (v%s).", a.Version)
 		}
 		return
 	}
-	if !force && !a.Store.Read().AppAuto {
+	if user && !install {
+		a.log("info", "Hay una versión nueva de la app: v%s.", rel.Version)
+		return
+	}
+	if !user && !a.Store.Read().AppAuto {
 		return
 	}
 	a.mu.Lock()
+	if a.updating {
+		a.mu.Unlock()
+		return
+	}
 	a.updating = true
 	a.mu.Unlock()
 	a.log("info", "Actualizando la app a v%s…", rel.Version)
@@ -90,6 +139,7 @@ func (a *App) CheckApp(force bool) {
 	if err != nil {
 		a.mu.Lock()
 		a.updating = false
+		a.appCheckErr = "no se pudo actualizar: " + err.Error()
 		a.mu.Unlock()
 		a.log("error", "No se pudo actualizar la app: %v", err)
 		return
@@ -119,7 +169,7 @@ func (a *App) appUpdateStatus(s state.State) AppUpdate {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	u.Updating = a.updating
+	u.Updating, u.Checking, u.CheckedAt, u.Error = a.updating, a.appChecking, a.appCheckedAt, a.appCheckErr
 	if a.appLatest != nil {
 		u.Latest, u.PageURL = a.appLatest.Version, a.appLatest.PageURL
 		u.Available = update.Newer(a.appLatest.Version, a.Version)

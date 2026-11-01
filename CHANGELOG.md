@@ -12,6 +12,21 @@ cada una:
 Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo. La 0.4.0 es el inicio de este
 changelog: resume todo lo que hace la app hasta ahí.
 
+## [0.6.1] - 2026-11-01
+
+### Para todos
+
+- **Addon: «Buscar actualización» e «Instalar» por separado**: buscar te dice si tenés la última («Tenés la última (v0.4.1)») o si hay una nueva, e «Instalar» la instala en tus versiones de WoW. Mientras trabaja se ve «Buscando…» o «Instalando…» y al final el resultado.
+- **«Instalar y actualizar el addon solo»**: con el interruptor prendido, la app instala el addon y lo mantiene al día sin que toques nada (al prenderlo, busca en el momento).
+- **«Buscar actualización» de la app**: ahora se nota el click y se ve que está buscando; al terminar dice si estás al día o si hay una versión nueva, con el botón para actualizar.
+- Los botones 🧩 y 🔄 de arriba también muestran que están trabajando y avisan el resultado con un cartel.
+
+### Técnico
+
+- Addon: `CheckAddon(force)` se separa en `StartAddonCheck` (`POST /api/addon/check`, solo consulta `latest.json`) y `StartAddonInstall` (`POST /api/addon/install`, instala la versión encontrada en las versiones de WoW habilitadas que no la tienen). Los dos corren en segundo plano y la respuesta ya trae la operación en curso; `CheckAddon()` queda para la revisión automática (al abrir, cada 6 h, al aceptar y al prender el interruptor) e instala solo con `addonAutoUpdate`. El estado va en `status.addon` (`busy` checking|installing, `result` uptodate|available|installed|error, `error`, `at`, `pending`); una operación a la vez.
+- App: `StartAppCheck(install)` reemplaza a `CheckApp(true)`: `POST /api/app/check` solo busca (antes «Buscar» también instalaba si encontraba algo) y `POST /api/app/update` busca e instala. `appUpdate` suma `checking`, `checkedAt` y `error`.
+- Panel: el botón se deshabilita con un spinner al menos 800 ms (aunque la respuesta sea instantánea) y consulta el estado cada 400 ms hasta que termina; los íconos de la barra giran y, si el pedido vino de la barra o de otra pestaña, el resultado sale en un cartel.
+
 ## [0.6.0] - 2026-10-29
 
 ### Para todos
